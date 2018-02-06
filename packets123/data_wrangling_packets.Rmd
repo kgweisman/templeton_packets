@@ -1,0 +1,1690 @@
+---
+title: 'SC data entry: Packets 1-3'
+subtitle: 'Data wrangling: Phase I (updated with data from 2018-01-31)'
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+This is a document describing how we clean up and "wrangle" data from Packets 1-3.
+
+# Setup
+
+The first thing to do is set up our workspace. 
+
+First, let's load some "packages" (suites of functions go beyond what's available in "Base R"), and make a couple of useful functions that we might need later.
+
+```{r setup}
+# load packages
+library(tidyverse) # full of useful functions for data-wrangling
+library(stringr)
+
+# make some functions for future use
+
+# general functions for turning things into numbers, etc.
+as.numchar_fun <- function(x){
+  # this takes a value, x
+  # turns it into a character string with 'as.character()'
+  # and then turns that character string into a number with 'as.numeric()'
+  return(as.numeric(as.character(x)))
+}
+
+# specific functions for "yes-no" kinds of answers
+as.factorYN_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("no", "yes", "missing data"))
+  return(y)
+}
+
+as.factorlog_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(toupper(x), levels = c("FALSE", "TRUE", "missing data"))
+  return(y)
+}
+
+# specific functions for a few variants on "how often?" kinds of answers
+factor_never_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x,
+              levels = c("never", "once in a while", "some days",
+                         "most days", "every day", "many times a day",
+                         "missing data"))
+  return(y)
+}
+
+factor_never_fun2 <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with optoins in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x,
+              levels = c("never", "once", "a few times",
+                         "once/year", "more than once/year", "a lot",
+                         "missing data"))
+  return(y)
+}
+
+factor_never_fun3 <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' and 'i don't know' LAST 
+  # so that they are the highest numbers
+  y <- factor(x, levels = c("never", "once", "several times",
+                            "fairly often", "very often",
+                            "i don't know", "missing data"))
+  return(y)
+}
+
+factor_never_fun4 <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' and 'i don't know' LAST 
+  # so that they are the highest numbers
+  y <- factor(x, levels = c("never", "sometimes", "often",
+                            "almost always", "always",
+                            "i don't know", "missing data"))
+  return(y)
+}
+
+# specific functions for a few variants on "do you agree?" kinds of answers
+factor_agree_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("strongly disagree", "disagree",
+                            "neither agree nor disagree",
+                            "agree", "strongly agree",
+                            "missing data"))
+  return(y)
+}
+
+factor_agree_fun2 <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("i do not agree", "i agree", "missing data")) 
+  return(y)
+}
+
+# specific function for closeness
+factor_close_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("not at all close", "somewhat close", 
+                            "very close", "as close as possible",
+                            "missing data"))
+  return(y)
+}
+
+# specific function for ses
+factor_SES_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("much poorer", "a little poorer", "about the same",
+                            "a little richer", "much richer",
+                            "missing data"))
+  return(y)
+}
+
+# specific function for attention checks
+factor_attn_fun <- function(x){
+  # this takes a value, x
+  # and turns it into a factor with options in this order
+  # NOTE: always put 'missing data' LAST so that it's the highest number
+  y <- factor(x, levels = c("fail", "pass", "missing data"))
+  return(y)
+}
+```
+
+A few notes: 
+
+1. For now, we include an option for "missing data" everywhere; we'll decide how to handle missing data (NA? 99? .?) in the next round of data processing. (Per conversation with Nikki 12/4/2017)
+2. For now, we treat "I don't know" as though it's "missing data."" 
+
+And now let's load in our data. (*NOTE: You'll have to change the filepaths so that they work on your computer.*)
+
+```{r}
+# 'p1v1' stands for 'packet 1 version 1' (etc.)
+# 'raw' indicates that these are not yet cleaned/processed
+p1v1_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet 1_Version 1_January 31, 2018_17.04.csv", fileEncoding = "latin1")
+p1v2_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet1_Version 2_January 31, 2018_17.05.csv", fileEncoding = "latin1")
+p2v1_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet2_Version 1_January 31, 2018_17.05.csv", fileEncoding = "latin1")
+p2v2_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet2_Version 2_January 31, 2018_17.06.csv", fileEncoding = "latin1")
+p3v1_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet3_Version 1_January 31, 2018_17.06.csv", fileEncoding = "latin1")
+p3v2_raw <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/data from Nikki/2018-01-31 versions/Packet3_Version 2_January 31, 2018_17.07.csv", fileEncoding = "latin1")
+```
+
+Here are a few ways we could take a look at the raw data to see what needs to happen (I'll just focus on `p1v1_raw`, but you could do this for all of them):
+
+```{r}
+# look at the names of all columsn
+names(p1v1_raw)
+
+# look at the name of each column and the first few entries
+# uncomment by deleting the '#' in the front to look
+# glimpse(p1v1_raw)
+
+# look at the whole dataframe in RStudio (like you would in Excel)
+# uncomment to look
+# View(p1v1_raw)
+```
+
+Looks like there are quite a few "encoding" problems (e.g., lots of `\r`s showing up, and some weird characters, like `äóî`) - this is a problem with Qualtrics that I haven't for the life of me been able to solve! Let's try to fix them here:
+
+```{r}
+encoding_fun <- function(x){
+  x %>%
+    str_replace_all("[[:digit:]]+[[:alpha:]]*[\\.]+\\s*", "") %>% # get rid of question numbers
+    str_replace_all('\\{"importid":"', '') %>% # get rid of this tag
+    str_replace_all('"\\}', '') %>%
+    str_replace_all("\\s+", " ") %>% # get rid of weird and double spaces
+    str_replace_all("\\p{quotation mark}", "'") %>% # get rid of weird quotes
+    str_replace_all("äó.", "'") %>% 
+    str_replace_all("\u0089Û.", "'") %>%
+    str_replace_all("\u0089û.", "'") %>%
+    str_replace_all("^[[:digit:]]+\\. ", "") %>% # get rid of numbers, etc. at 
+    str_replace_all("^[[:digit:]]+\\) ", "") %>% # beginning of some
+    str_replace_all("^[[:digit:]] = ", "") %>% # response options
+    trimws()
+}
+
+# do this to every dataset
+p1v1_encoded <- p1v1_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+p1v2_encoded <- p1v2_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+p2v1_encoded <- p2v1_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+p2v2_encoded <- p2v2_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+p3v1_encoded <- p3v1_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+p3v2_encoded <- p3v2_raw %>% 
+  mutate_all(funs(tolower)) %>% 
+  mutate_all(funs(encoding_fun))
+
+# check them out
+glimpse(p1v1_encoded)
+```
+
+Ok, looks a little better - let's get started. 
+
+# Master list of questions
+
+## Making the master list (ugh)
+
+I think what makes the most sense is to make a master list of all of the questions and where they appear in all of the packets and versions.
+
+```{r}
+# make a function for converting raw data to information about the questions
+raw.to.question_fun <- function(df, packet, version){
+  
+  # do the transformations
+  df_questions <- df[c(1,2),] %>% # take rows 1 and 2 from the raw data
+    t() %>% # transpose the matrix
+    data.frame() %>% # turn it into a dataframe
+    rownames_to_column("question_label") %>% # turn the rownames into their own column
+    rename(question_text = X1, # rename the other two columns
+           question_importId = X2) %>%
+    mutate_all(funs(as.character)) %>% # turn everything into a character string
+    mutate(packet = packet, version = version) %>%
+    ungroup() %>%
+    distinct()
+
+  # spit that back out
+  return(df_questions)
+}
+
+# do this for all packets, and stitch them together
+question_key <- raw.to.question_fun(p1v1_encoded, packet = 1, version = 1) %>%
+  full_join(raw.to.question_fun(p1v2_encoded, packet = 1, version = 2)) %>%
+  full_join(raw.to.question_fun(p2v1_encoded, packet = 2, version = 1)) %>%
+  full_join(raw.to.question_fun(p2v2_encoded, packet = 2, version = 2)) %>%
+  full_join(raw.to.question_fun(p3v1_encoded, packet = 3, version = 1)) %>%
+  full_join(raw.to.question_fun(p3v2_encoded, packet = 3, version = 2)) %>%
+  mutate(question_label = gsub("^p.v._", "", question_label), # get rid of the 'p1v1_' (etc.) label before question_label
+         scale = gsub("_.*$", "", question_label)) %>% # infer which scale the question is from 
+  mutate_all(funs(as.character)) %>%
+  data.frame() %>%
+  select(scale, packet, version, 
+         question_label, question_text) %>% # re-order columns
+  ungroup() %>% 
+  distinct() # include only distinct entries in the dataframe, and get rid of 'question_importId'
+
+glimpse(question_key)
+```
+
+Ok, now we have a list of question labels (`question_label`) and the corresponding text (`question_text`). Let's check them out to see if there are any problems. I'll start out by looking for duplicates - this would indicate that there's some discrepency across packets.
+
+```{r}
+# look for duplicates - this would indicate there's some discrepancy across packets
+# first, questions that share a label but have different texts
+dup_label1 <- question_key %>% # start with the question key
+  distinct(question_label, question_text) %>% # include only distinct combinations of question_label and question_text
+  count(question_label) %>% # count how many times each question_label appears
+  filter(n > 1) %>% # only include things that appear more than once (potential problems)
+  data.frame() # make it a dataframe
+
+# next, questions that share a text but have different labels
+dup_text1 <- question_key %>% 
+  distinct(question_label, question_text) %>% 
+  count(question_text) %>% # count how many times each question_text appears
+  filter(n > 1) %>% 
+  data.frame()
+
+# uncomment to look
+# dup_label1 %>% arrange(question_label)
+# dup_text1 %>% arrange(question_text)
+```
+
+Looks like there are a few problems here: `r nrow(dup_label1)` questions that have the same label but different texts, and `r nrow(dup_text1)` that have the same texts but different labels (presumably many of these overlap). 
+
+Let's look at these problematic questions in more detail:
+
+```{r}
+# uncomment to look
+# question_key %>% # start with question_key
+#   filter(question_label %in% dup_label1$question_label | # include only questions that either appear in the list of duplicate labels...
+#            question_text %in% dup_text1$question_text) %>% # ... or in the list of duplicate texts
+#   arrange(scale, question_label, question_text) # sort
+```
+
+Here are the problems I detected, and the solutions:
+
+1. Today's date is called `date` in Packet 1, Version 2, but `2day` in all of the other packets. Let's make a universal label, and call this question "date" everywhere:
+
+```{r}
+question_key <- question_key %>%
+  mutate(question_label_universal = ifelse(question_label == "2day",
+                                           "date",
+                                           question_label)) %>%
+  distinct()
+```
+
+
+2. In Packet 2 Version 1, `demo_afffr` appears to be a typo! Should be `demo_affr`:
+
+```{r}
+question_key <- question_key %>%
+  mutate(question_label_universal = ifelse(question_label_universal == "demo_afffr",
+                                           "demo_affr",
+                                           question_label_universal)) %>%
+  distinct()
+```
+
+3. There are a couple of pairs of questions in the `dse` scale (`dse_07f` and `dse_08f`; `dse_07g` and `dse_08g`) that seem to use the same question text. After talking to Nikki (12/4/2017), we figured out that `dse_08f` and `dse_08g` had typos. I'll correct them here:
+
+```{r}
+# how i figured this out (uncomment to look)
+# question_key %>% 
+#   filter(question_text == question_key$question_text[question_key$question_label == "dse_07f"][1]) %>%
+#   distinct(question_label, packet, version)
+# 
+# question_key %>% 
+#   filter(question_text == question_key$question_text[question_key$question_label == "dse_07g"][1]) %>%
+#   distinct(question_label, packet, version)
+
+# how i fixed it
+question_key <- question_key %>%
+  mutate(question_text = 
+           ifelse(question_label_universal %in% c("dse_08f", "dse_08g"),
+                  gsub("ask", "feel guided by", question_text),
+                  question_text)) %>%
+  distinct()
+```
+
+4. `dse_15f` had very slightly different wording across Packet 1 Versions 1 and 2: In Version 1, it read, "I desire to be closer to other **kinds of** spirits or to be in union with other **kinds of** spirits" (emphasis added); in Version 2, it read, "I desire to be closer to other spirits or in union with other spirits." I'll change them both to read, "I desire to be closer to other [kinds of] spirits or in union with other [kinds of] spirits."
+
+```{r}
+question_key <- question_key %>%
+  mutate(question_text = ifelse(question_label_universal == "dse_15f",
+                                "(thailand packets only) i desire to be closer to other [kinds of] spirits or in union with other [kinds of] spirits. (6th option)",
+                                question_text)) %>%
+  distinct()
+```
+
+5. `dse_08g` also had slightly different wording across Packet 1 Versions 1 and 2: in Version 1, it read, "I feel guided by **the** Bhudda **for help** in the midst of daily activities" (emphasis added); In Version 2, it read, "I feel guided by Bhudda in the midst of daily activities." I'll change them both to read, "I feel guided by [the] Buddha [for help] in the midst of daily activities."
+
+```{r}
+question_key <- question_key %>%
+  mutate(question_text = ifelse(question_label_universal == "dse_08f",
+                                "(thailand packets only) i feel guided by [the] buddha [for help] in the midst of daily activities. (6th option)",
+                                question_text)) %>%
+  distinct()
+```
+
+6. `dse_08g` also had slightly different wording across Packet 1 Versions 1 and 2: in Version 1, it read, "I feel guided by other kinds of spirits **for help** in the midst of daily activities" (emphasis added); In Version 2, it read, "I feel guided by other kinds of spirits in the midst of daily activities." I'll change them both to read, "I feel guided by other kinds of spirits [for help] in the midst of daily activities."
+
+```{r}
+question_key <- question_key %>%
+  mutate(question_text = ifelse(question_label_universal == "dse_08g",
+                                "(thailand packets only) i feel guided by other kinds of spirits [for help] in the midst of daily activities. (6th option)",
+                                question_text)) %>%
+  distinct()
+```
+
+Let's step back and re-check our duplicates: 
+
+```{r}
+# look for duplicates (again)
+dup_label2 <- question_key %>% 
+  distinct(question_label_universal, question_text) %>% 
+  count(question_label_universal) %>% 
+  filter(n > 1) %>% 
+  data.frame() 
+
+dup_text2 <- question_key %>% 
+  distinct(question_label_universal, question_text) %>% 
+  count(question_text) %>% 
+  filter(n > 1) %>% 
+  data.frame()
+
+# uncomment to look
+# dup_label2
+# dup_text2
+
+question_key %>%
+  filter(question_label_universal %in% dup_label2$question_label_universal | 
+           question_text %in% dup_text2$question_text) %>% 
+  arrange(scale, question_label_universal, question_text)
+```
+
+Ok, looks like we're down to just two more issues: attention checks and the `invo` scale.
+
+7. Looks like some of the "attention check" questions (`dse_attn`, `exwl_attn`, `her_attn`, `meta_attn`, `minw_attn`, and `spev_attn`) used the same text - similar to the couple of questions on the `dse` scale, above (#3). No problem, nothing to fix.
+
+8. 10 questions in the `invo` scale have multiple question labels associated with the same question text - after talking with Nikki (12/4/2017) we figured out that that's because some packets contained the full scale (Packet 2 Versions 1 and 2), and some contained only a subset of 10 questions from this scale (Packet 3 Versions 1 and 2). Let's solve this by adding a "universal" question label that will be the same across surveys. I'll do this manually for now (alternatively, we could use the labels associated with the full scale as the "real" labels for universal labeling purposes, but that's a little riskier if we're not 100% sure that Packet 2 has the complete set of all possible questions associated with this scale):
+
+```{r}
+# make a new dataframe of labels for this scale
+invo_labels <- question_key %>% # start with question key
+  filter(scale == "invo") %>% # limit it to the invo scale
+  arrange(packet, version, question_label) %>% # arrange questions in order
+  distinct(question_text) %>% # keep only unique question texts
+  mutate(question_newlab = paste0("invo_newlab_", 1:24), # give them new labels
+         question_newlab = ifelse(grepl("attention", question_text), # keep the attention check's original label
+                                  "invo_attn", question_newlab))
+
+question_key <- question_key %>% 
+  full_join(invo_labels) %>% # merge these new labels back into the question key
+  mutate(question_label_universal = ifelse(scale == "invo",
+                                           question_newlab,
+                                           question_label_universal)) %>%
+  select(-question_newlab) %>%
+  mutate_at(vars(packet, version), funs(as.numchar_fun)) %>%
+  ungroup() %>%
+  distinct()
+```
+
+Let's step back and re-check our duplicates once again: 
+
+```{r}
+# look for duplicates (again)
+dup_label3 <- question_key %>% 
+  filter(!grepl("attn", question_label_universal),
+         !grepl("attention check", question_text), # exclude attention checks
+         !question_label_universal %in% # exclude the repeat questions in dse scale
+           c("dse_07f", "dse_08f", "dse_07g", "dse_08g")) %>% 
+  distinct(question_label_universal, question_text) %>% 
+  count(question_label_universal) %>% 
+  filter(n > 1) %>% 
+  data.frame() 
+
+dup_text3 <- question_key %>% 
+  filter(!grepl("attn", question_label_universal),
+         !grepl("attention check", question_text), # exclude attention checks
+         !question_label_universal %in% # exclude the repeat questions in dse scale
+           c("dse_07f", "dse_08f", "dse_07g", "dse_08g")) %>% 
+  distinct(question_label_universal, question_text) %>% 
+  count(question_text) %>% 
+  filter(n > 1) %>% 
+  data.frame()
+
+# uncomment to look
+# dup_label3
+# dup_text3
+
+question_key %>%
+  filter(question_label %in% dup_label3$question_label_universal | 
+           question_text %in% dup_text3$question_text) %>% 
+  arrange(scale, question_label_universal, question_text)
+```
+
+Nothing to see here! :)
+
+A couple other notes/tweaks:
+
+9. `demo_rlgn` and `demo_rlgn_8_TEXT` need to be combined: After talking to Nikki (12/4/2017), we figured out that `demo_rlgn_8_TEXT` is the write-in option when the data-enterer selects "other" for `demo_rlgn`. We'll deal with this below (in the `packet_tidy_fun` function).
+
+10. `wher...Topics` is some sort of weird output from Qualtrics that neither Nikki nor I understand - we'll just leave it for now.
+
+## The (almost) final master list (yay!)
+
+Let's take a look at our final master list of questions:
+
+```{r}
+# uncomment to look (or open question_key.csv!)
+# question_key
+```
+
+Looks like we're ready to go!
+
+# Tidying data
+
+Now that we have a question key, let's use that to merge all the data from all the different packets. 
+
+## Merging packets
+
+First, let's make a "tidy" version of each individual packet:
+
+```{r}
+packet_tidy_fun <- function(df, packet, version){
+  # start with the raw data, minus the first two rows of info about the questions
+  df_tidy <- df[-c(1,2),] 
+  
+  # fix issues with the column names
+  names(df_tidy) <- gsub("p.v._", "", names(df_tidy))
+  names(df_tidy)[names(df_tidy) == "2day"] <- "date"
+  
+  # tidy it up!
+  df_tidy <- df_tidy %>%
+    mutate_all(funs(as.character)) %>%
+    mutate(demo_rlgn = # deal with religion write-ins!
+             ifelse(grepl("please enter", tolower(demo_rlgn)),
+                    demo_rlgn_8_TEXT,
+                    demo_rlgn)) %>%
+    select(-demo_rlgn_8_TEXT) %>%
+    gather(question_label, response, 
+           -subj, -batc, -entr, -date) %>% # make it so that instead of having one row for every subject, we have one row for every question for every subject for every batch of data entry
+    mutate(question_label = gsub("p.v._", "", question_label),
+           packet = packet,
+           version = version) %>% 
+    left_join(question_key %>% # merge it with our big question key
+                filter(packet == packet, 
+                       version == version)) %>% 
+    select(subj, packet, version, # reorder and omit 
+           batc, entr, date, # the idiosyncratic question label
+           scale, question_label_universal, question_text, response) %>%
+    ungroup() %>%
+    filter(!is.na(subj), 
+           !is.na(question_label_universal),
+           !is.na(question_text),
+           packet == packet,
+           version == version) %>%
+    distinct()
+}
+
+p1v1_tidy <- packet_tidy_fun(p1v1_encoded, packet = 1, version = 1)
+p1v2_tidy <- packet_tidy_fun(p1v2_encoded, packet = 1, version = 2)
+p2v1_tidy <- packet_tidy_fun(p2v1_encoded, packet = 2, version = 1)
+p2v2_tidy <- packet_tidy_fun(p2v2_encoded, packet = 2, version = 2)
+p3v1_tidy <- packet_tidy_fun(p3v1_encoded, packet = 3, version = 1)
+p3v2_tidy <- packet_tidy_fun(p3v2_encoded, packet = 3, version = 2)
+
+# check them out!
+glimpse(p1v1_tidy)
+# glimpse(p1v2_tidy)
+# glimpse(p2v1_tidy)
+# glimpse(p2v2_tidy)
+# glimpse(p3v1_tidy)
+# glimpse(p3v2_tidy)
+```
+
+Now, let's merge them all together:
+
+```{r, warning = FALSE, message = FALSE}
+d_merge <- p1v1_tidy %>% # start with p1v1
+  full_join(p1v2_tidy) %>% # add the others...
+  full_join(p2v1_tidy) %>%
+  full_join(p2v2_tidy) %>%
+  full_join(p3v1_tidy) %>%
+  full_join(p3v2_tidy) %>%
+  mutate_at(vars(subj, packet, version, batc, entr, scale, 
+                 question_label_universal, question_text), 
+            funs(factor)) %>% # turn these variables into factors rather than character strings
+  mutate(date = parse_datetime(gsub("1017", "17", date), 
+                               format = "%m/%d/%y")) # turn dates into dates
+
+# take a look
+glimpse(d_merge)
+```
+
+## Adding answer options to question key
+
+One more thing: Let's add the options for answering for each question to our question key. (We couldn't do this earlier because we hadn't merged all the responses together yet.)
+
+```{r, warning = FALSE, message = FALSE}
+question_answers <- data.frame(question_label_universal = character(),
+                               answer_options = character())
+
+for(i in levels(factor(d_merge$question_label_universal))) {
+  question_lab <- i
+  answer_opts <- with(d_merge %>%
+                           filter(question_label_universal == i),
+                         levels(factor(response))) %>%
+    paste(collapse = "; ")
+
+    data <- data.frame(question_label_universal = question_lab,
+                     answer_options = answer_opts)
+  
+  question_answers <- question_answers %>%
+    full_join(data.frame(question_label_universal = question_lab,
+                         answer_options = answer_opts))
+}
+
+question_answers <- question_answers %>%
+  mutate_all(funs(. %>% str_replace_all("^; ", "")))
+
+question_key <- question_key %>%
+  filter(question_label_universal != "demo_rlgn_8_TEXT") %>% # get rid of write-in
+  full_join(question_answers)
+
+# uncomment to look
+# question_key
+```
+
+## Checking for duplicate subjects
+
+Let's double-check that this looks pretty much like we'd expect - 2 entries per subject, with different batch numbers (and probably different dates and data-enterers):
+
+```{r}
+dup_subj <- d_merge %>%
+  distinct(subj, packet, version, batc, entr, date) %>%
+  count(subj) %>%
+  filter(n != 2) %>%
+  arrange(desc(n), desc(subj))
+
+dup_subj
+```
+
+Hm, not quite - looks like there are `r nrow(dup_subj)` subjects that have >2 entries in this dataset. Let's check them out in more detail.
+
+```{r}
+# uncomment to look
+# d_merge %>%
+#   distinct(subj, packet, version, batc, entr, date) %>%
+#   arrange(subj, packet, version, batc, entr, date) %>%
+#   filter(subj %in% dup_subj$subj)
+```
+
+This shows me that we currently think some subjects were in both Packet 1 and Packet 2, and other subjects seem to be in 3 packets. There's nothing necessarily wrong with this, but let's just make sure that the raw data reflect this, too.
+
+```{r, warning = FALSE, message = FALSE}
+dup_subj2 <- p1v1_raw %>%
+  filter(p1v1_subj %in% dup_subj$subj) %>%
+  count(p1v1_subj) %>%
+  rename(subj = p1v1_subj, p1v1_n = n) %>%
+  full_join(p1v2_raw %>%
+              filter(p1v2_subj %in% dup_subj$subj) %>%
+              count(p1v2_subj) %>%
+              rename(subj = p1v2_subj, p1v2_n = n)) %>%
+  full_join(p2v1_raw %>%
+              filter(p2v1_subj %in% dup_subj$subj) %>%
+              count(p2v1_subj) %>%
+              rename(subj = p2v1_subj, p2v1_n = n)) %>%
+  full_join(p2v2_raw %>%
+              filter(p2v2_subj %in% dup_subj$subj) %>%
+              count(p2v2_subj) %>%
+              rename(subj = p2v2_subj, p2v2_n = n)) %>%
+  full_join(p3v1_raw %>%
+              filter(p3v1_subj %in% dup_subj$subj) %>%
+              count(p3v1_subj) %>%
+              rename(subj = p3v1_subj, p3v1_n = n)) %>%
+  full_join(p3v2_raw %>%
+              filter(p3v2_subj %in% dup_subj$subj) %>%
+              count(p3v2_subj) %>%
+              rename(subj = p3v2_subj, p3v2_n = n)) %>%
+  column_to_rownames("subj") %>%
+  rowSums(na.rm = T) %>%
+  data.frame() %>%
+  rename(n = ".") %>%
+  rownames_to_column("subj") %>%
+  arrange(desc(n), desc(subj))
+
+dup_subj_compare <- dup_subj %>%
+  full_join(dup_subj2, by = c("subj" = "subj")) %>%
+  rename(n_v1 = n.x, n_v2 = n.y) %>%
+  mutate(match = (n_v1 == n_v2))
+
+dup_subj_compare %>%
+  filter(match != TRUE)
+```
+
+Looks like the raw data match the tidy data.
+
+But is anyone showing up in the same packet (same version, same "batch") multiple times? 
+
+```{r}
+dup_subj3 <- d_merge %>%
+  distinct(subj, packet, version, batc, entr, date) %>%
+  arrange(subj, packet, version, batc, entr, date) %>%
+  filter(subj %in% dup_subj$subj) %>%
+  count(packet, version, batc, subj) %>%
+  filter(n > 1)
+
+d_merge %>%
+  distinct(subj, packet, version, batc, entr, date) %>%
+  filter(subj %in% dup_subj3$subj) %>%
+  arrange(subj, packet, version, batc, date)
+
+dup_subj3
+```
+
+Yes, looks like `r nrow(dup_subj3)` participants have more than 1 entry in the same packet, version, and batch. I'll correct these things by hand below:
+
+a. Sometimes, this seems to be an issue of the same packet being entered twice in the same day. In this case, I'm going to assign Dominic to be "first" and Lucy to be "second" (alphabetical order). 
+b. In other cases, it's an issue with the data enterer choosing the wrong option, e.g., saying "first" when they should have said "second". In this case, I'm going to assign "first" and "second" batches based on the date of data entry.
+
+```{r}
+d_merge$batc[d_merge$subj == "10176" &
+               d_merge$packet == "2" & 
+               d_merge$version == "1" & 
+               d_merge$entr == "dominic"] <- "first"
+
+d_merge$batc[d_merge$subj == "20006" &
+               d_merge$packet == "2" & 
+               d_merge$version == "1" & 
+               d_merge$entr == "dominic"] <- "first"
+
+d_merge$batc[d_merge$subj == "20098" &
+               d_merge$packet == "2" & 
+               d_merge$version == "2" & 
+               d_merge$date == "2018-01-30"] <- "second"
+
+d_merge$batc[d_merge$subj == "10176" &
+               d_merge$packet == "3" & 
+               d_merge$version == "1" & 
+               d_merge$date == "2017-12-15"] <- "second"
+
+dup_subj4 <- d_merge %>%
+  distinct(subj, packet, version, batc, entr, date) %>%
+  arrange(subj, packet, version, batc, entr, date) %>%
+  filter(subj %in% dup_subj$subj) %>%
+  count(packet, version, batc, subj) %>%
+  filter(n > 1)
+
+dup_subj4
+```
+
+Ok, all clear :)
+
+## Recoding variables
+
+Now let's transform the remaining variables from character strings into however we really want to analyze them. There are many things we might want to do - here's a template in the form of a function (see descriptions in comments):
+
+```{r}
+recode_fun <- function(df, 
+                       vars_factor = NULL, 
+                       vars_numeric = NULL, 
+                       vars_logical = NULL,
+                       vars_factorYN = NULL,
+                       vars_agree = NULL, 
+                       vars_agree2 = NULL, 
+                       vars_never = NULL, 
+                       vars_never2 = NULL, 
+                       vars_never3 = NULL,
+                       vars_never4 = NULL,
+                       vars_close = NULL,
+                       vars_ses = NULL,
+                       vars_attn = NULL,
+                       vars_numeric_new = NULL, 
+                       vars_minusone = NULL){
+  df_recoded <- df
+  
+  # deal with variables that just need to be turned into factors
+  if(is.null(vars_factor)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_factor),
+                funs(.funs = factor))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_factor]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with variables that just need to be turned into numbers
+  if(is.null(vars_numeric)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_numeric),
+                funs(.funs = as.numeric))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_numeric]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+
+  # deal with variables that just need to be turned into logicals
+  if(is.null(vars_logical)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_logical),
+                funs(.funs = as.factorlog_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_logical]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with yes/no questions
+  if(is.null(vars_factorYN)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_factorYN),
+                funs(.funs = as.factorYN_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_factorYN]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with various forms of 'do you agree?'
+  if(is.null(vars_agree)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_agree),
+                funs(.funs = factor_agree_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_agree]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  if(is.null(vars_agree2)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_agree2),
+                funs(.funs = factor_agree_fun2))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_agree2]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+
+  # deal with various forms of 'how often?'
+  if(is.null(vars_never)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_never),
+                funs(.funs = factor_never_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_never]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  if(is.null(vars_never2)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_never2),
+                funs(.funs = factor_never_fun2))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_never2]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  if(is.null(vars_never3)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_never3),
+                funs(.funs = factor_never_fun3))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_never3]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  if(is.null(vars_never4)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_never4),
+                funs(.funs = factor_never_fun4))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_never4]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with closeness
+  if(is.null(vars_close)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_close),
+                funs(.funs = factor_close_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_close]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with ses
+  if(is.null(vars_ses)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_ses),
+                funs(.funs = factor_SES_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_ses]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # deal with attention checks
+  if(is.null(vars_attn)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_attn),
+                funs(.funs = factor_attn_fun))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_attn]
+    names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  }
+  
+  # make new numeric versions of factor variables (but keep the old ones too)
+  if(is.null(vars_numeric_new)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_numeric_new),
+                .funs = funs(num = as.numeric))
+    
+    for(i in vars_numeric_new){
+      missing_val <- factor("missing data",
+                            levels(df_recoded[,i])) %>% 
+        as.numeric()
+      idk_val <- factor("i don't know",
+                        levels(df_recoded[,i])) %>% 
+        as.numeric()
+      
+      replace_missing_fun <- function(x){
+        y <- ifelse(x %in% c(missing_val, idk_val), NA, x)
+        return(y)
+      }
+      
+      df_recoded <- df_recoded %>%
+        mutate_at(vars(paste0(i, "_num")),
+                  funs(replace_missing_fun))
+    }
+  }
+
+  # subtract 1 from (selected) numeric variables (NOTE: here and elsewhere, when the options are basically yes or no, I'm  subtracting 1 so that no = 0; we could do this for all numerically coded variables but I won't right now)
+  if(is.null(vars_minusone)){} else {
+    df_recoded <- df_recoded %>%
+      mutate_at(vars(.dots = vars_minusone),
+                funs(.funs = . - 1))
+    df_recoded <- df_recoded[!names(df_recoded) %in% vars_minusone]
+  }
+
+  names(df_recoded) <- gsub("_.funs", "", names(df_recoded))
+  
+  return(df_recoded)
+}
+```
+
+We'll start out by doing this for each scale separately, just because it's easier to think about. What are the scales we need to deal with?
+
+```{r}
+# look at the list of scales
+levels(d_merge$scale)
+```
+
+Let's deal with them each in turn:
+
+```{r}
+# a few scales with general info about the subject/site
+d_info <- d_merge %>%
+  filter(scale %in% c("ctry", "file", "recr", # limit to just these scales
+                      "wher", "wher...Topics", "whoc")) %>%
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("ctry", "file", "recr", # limit to just these scales
+#                       "wher", "wher...Topics", "whoc")) %>%
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_info <- d_info %>%
+  recode_fun(vars_factor = c("ctry", "recr", "whoc"))
+
+glimpse(d_info)
+```
+
+```{r}
+# demographics
+d_demo <- d_merge %>%
+  filter(scale %in% c("demo")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("demo")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_demo <- d_demo %>%
+  recode_fun(
+    vars_factor = c("demo_rlgn", "demo_sex", "demo_ubru"),
+    vars_numeric = "demo_age",
+    # vars_logical = XX,
+    vars_factorYN = c("demo_affr", "demo_tung"),
+    vars_agree = "demo_howr",
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    vars_ses = "demo_ses",
+    # vars_attn = XX,
+    vars_numeric_new = c("demo_affr", "demo_tung", "demo_howr", "demo_ses"),
+    vars_minusone = c("demo_affr_num", "demo_tung_num")
+    )
+
+glimpse(d_demo)
+```
+
+```{r}
+# dse scale
+d_dse <- d_merge %>%
+  filter(scale %in% c("dse")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("dse")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_dse <- d_dse %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    vars_never = c("dse_01", "dse_02", "dse_03", "dse_04", "dse_05", "dse_06", 
+                   "dse_07", "dse_07a", "dse_07b", "dse_07c", "dse_07d", 
+                   "dse_07f", "dse_07g", "dse_08", "dse_08a", "dse_08b", 
+                   "dse_08c", "dse_08d", "dse_08f", "dse_08g", "dse_09", 
+                   "dse_10", "dse_11", "dse_12", "dse_13", "dse_14"),
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    vars_close = c("dse_15", "dse_15a", "dse_15b", "dse_15c", "dse_15e", 
+                   "dse_15f", "dse_16", "dse_16a", "dse_16b", "dse_16c", 
+                   "dse_16e", "dse_16f"),
+    # vars_ses = XX,
+    vars_attn = "dse_attn",
+    vars_numeric_new = c("dse_01", "dse_02", "dse_03", "dse_04", "dse_05", 
+                         "dse_06", "dse_07", "dse_07a", "dse_07b", "dse_07c", 
+                         "dse_07d", "dse_07f", "dse_07g", "dse_08", "dse_08a", 
+                         "dse_08b", "dse_08c", "dse_08d", "dse_08f", "dse_08g", 
+                         "dse_09", "dse_10", "dse_11", "dse_12", "dse_13", 
+                         "dse_14", "dse_15", "dse_15a", "dse_15b", "dse_15c", 
+                         "dse_15e", "dse_15f", "dse_16", "dse_16a", "dse_16b", 
+                         "dse_16c", "dse_16e", "dse_16f", "dse_attn"),
+    vars_minusone = "dse_attn_num"
+    )
+
+glimpse(d_dse)
+```
+
+```{r}
+# enco scale
+d_enco <- d_merge %>%
+  filter(scale %in% c("enco")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("enco")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_enco <- d_enco %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    vars_never2 = c("enco_01", "enco_02", "enco_03", "enco_04", "enco_05",
+                    "enco_06", "enco_07", "enco_08"),
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    # vars_attn = XX,
+    vars_numeric_new = c("enco_01", "enco_02", "enco_03", "enco_04", "enco_05",
+                    "enco_06", "enco_07", "enco_08") #,
+    # vars_minusone = XX
+    )
+
+glimpse(d_enco)
+```
+
+```{r}
+# exwl scale
+d_exwl <- d_merge %>%
+  filter(scale %in% c("exwl")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("exwl")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_exwl <- d_exwl %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    vars_logical = c("exwl_01", "exwl_1b", "exwl_02", "exwl_2b", "exwl_03", 
+                     "exwl_3b", "exwl_04", "exwl_05", "exwl_06", "exwl_07", 
+                     "exwl_08", "exwl_09", "exwl_10", "exwl_11", "exwl_12", 
+                     "exwl_13", "exwl_14", "exwl_15", "exwl_16", "exwl_17", 
+                     "exwl_18", "exwl_19", "exwl_20", "exwl_21", "exwl_22",
+                     "exwl_23", "exwl_24", "exwl_25", "exwl_26", "exwl_27",
+                     "exwl_28", "exwl_29", "exwl_30", "exwl_31", "exwl_32",
+                     "exwl_33", "exwl_34"),
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "exwl_attn",
+    vars_numeric_new = c("exwl_01", "exwl_1b", "exwl_02", "exwl_2b", "exwl_03",
+                         "exwl_3b", "exwl_04", "exwl_05", "exwl_06", "exwl_07",
+                         "exwl_08", "exwl_09", "exwl_10", "exwl_11", "exwl_12",
+                         "exwl_13", "exwl_14", "exwl_15", "exwl_16", "exwl_17",
+                         "exwl_18", "exwl_19", "exwl_20", "exwl_21", "exwl_22",
+                         "exwl_23", "exwl_24", "exwl_25", "exwl_26", "exwl_27",
+                         "exwl_28", "exwl_29", "exwl_30", "exwl_31", "exwl_32",
+                         "exwl_33", "exwl_34", "exwl_attn"),
+    vars_minusone = c("exwl_01_num", "exwl_1b_num", "exwl_02_num", 
+                      "exwl_2b_num", "exwl_03_num", "exwl_3b_num", 
+                      "exwl_04_num", "exwl_05_num", "exwl_06_num", 
+                      "exwl_07_num", "exwl_08_num", "exwl_09_num", 
+                      "exwl_10_num", "exwl_11_num", "exwl_12_num", 
+                      "exwl_13_num", "exwl_14_num", "exwl_15_num", 
+                      "exwl_16_num", "exwl_17_num", "exwl_18_num", 
+                      "exwl_19_num", "exwl_20_num", "exwl_21_num", 
+                      "exwl_22_num", "exwl_23_num", "exwl_24_num", 
+                      "exwl_25_num", "exwl_26_num", "exwl_27_num", 
+                      "exwl_28_num", "exwl_29_num", "exwl_30_num", 
+                      "exwl_31_num", "exwl_32_num", "exwl_33_num", 
+                      "exwl_34_num", "exwl_attn_num")
+    )
+
+glimpse(d_exwl)
+```
+
+```{r}
+# her scale
+d_her <- d_merge %>%
+  filter(scale %in% c("her")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("her")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_her <- d_her %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    vars_factorYN = c("her_01", "her_02", "her_03", "her_04a", "her_04b",
+                      "her_04c", "her_05a", "her_05b", "her_05c", "her_06",
+                      "her_07", "her_08", "her_09", "her_10", "her_11", 
+                      "her_12", "her_13", "her_14"),
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "her_attn",
+    vars_numeric_new = c("her_01", "her_02", "her_03", "her_04a", "her_04b",
+                         "her_04c", "her_05a", "her_05b", "her_05c", "her_06",
+                         "her_07", "her_08", "her_09", "her_10", "her_11",
+                         "her_12", "her_13", "her_14", "her_attn"),
+    vars_minusone = c("her_01_num", "her_02_num", "her_03_num", "her_04a_num", 
+                      "her_04b_num", "her_04c_num", "her_05a_num", 
+                      "her_05b_num", "her_05c_num", "her_06_num", "her_07_num", 
+                      "her_08_num", "her_09_num", "her_10_num", "her_11_num",
+                      "her_12_num", "her_13_num", "her_14_num", "her_attn_num")
+    )
+
+glimpse(d_her)
+```
+
+```{r}
+# her2 scale
+d_her2 <- d_merge %>%
+  filter(scale %in% c("her2")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("her2")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_her2 <- d_her2 %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    vars_never4 = c("her2_01", "her2_02", "her2_03", "her2_04", "her2_05",
+                    "her2_06", "her2_07", "her2_08", "her2_09"),
+    # vars_close = XX,
+    # vars_ses = XX,
+    # vars_attn = XX,
+    vars_numeric_new = c("her2_01", "her2_02", "her2_03", "her2_04", "her2_05",
+                         "her2_06", "her2_07", "her2_08", "her2_09") # ,
+    # vars_minusone = XX
+    )
+
+glimpse(d_her2)
+```
+
+```{r}
+# invo scale
+d_invo <- d_merge %>%
+  filter(scale %in% c("invo")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("invo")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_invo <- d_invo %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    vars_agree = c("invo_newlab_1", "invo_newlab_2", "invo_newlab_3",
+                   "invo_newlab_4", "invo_newlab_5", "invo_newlab_6",
+                   "invo_newlab_7", "invo_newlab_8", "invo_newlab_9",
+                   "invo_newlab_10", "invo_newlab_11", "invo_newlab_12",
+                   "invo_newlab_13", "invo_newlab_14", "invo_newlab_15",
+                   "invo_newlab_16", "invo_newlab_17", "invo_newlab_18",
+                   "invo_newlab_19", "invo_newlab_20", "invo_newlab_21",
+                   "invo_newlab_22", "invo_newlab_23"),
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "invo_attn",
+    vars_numeric_new = c("invo_newlab_1", "invo_newlab_2", "invo_newlab_3",
+                         "invo_newlab_4", "invo_newlab_5", "invo_newlab_6",
+                         "invo_newlab_7", "invo_newlab_8", "invo_newlab_9",
+                         "invo_newlab_10", "invo_newlab_11", "invo_newlab_12",
+                         "invo_newlab_13", "invo_newlab_14", "invo_newlab_15",
+                         "invo_newlab_16", "invo_newlab_17", "invo_newlab_18",
+                         "invo_newlab_19", "invo_newlab_20", "invo_newlab_21",
+                         "invo_newlab_22", "invo_newlab_23", "invo_attn"),
+    vars_minusone = "invo_attn_num"
+    )
+
+glimpse(d_invo)
+```
+
+```{r}
+# meta scale
+d_meta <- d_merge %>%
+  filter(scale %in% c("meta")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+  # recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("meta")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_meta <- d_meta %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    vars_agree = c("meta_01", "meta_02", "meta_03", "meta_04", "meta_05",
+                   "meta_06", "meta_07", "meta_08"),
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "meta_attn",
+    vars_numeric_new = c("meta_01", "meta_02", "meta_03", "meta_04", "meta_05",
+                         "meta_06", "meta_07", "meta_08", "meta_attn"),
+    vars_minusone = "meta_attn_num"
+    )
+
+glimpse(d_meta)
+```
+
+```{r}
+# minw scale
+d_minw <- d_merge %>%
+  filter(scale %in% c("minw")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+# recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("minw")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_minw <- d_minw %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    vars_agree2 = c("minw_01", "minw_02", "minw_03", "minw_04", "minw_05",
+                    "minw_06", "minw_07", "minw_08", "minw_09", "minw_10",
+                    "minw_11", "minw_12", "minw_13", "minw_14", "minw_15",
+                    "minw_16", "minw_17", "minw_18", "minw_19", "minw_20",
+                    "minw_21", "minw_22", "minw_23", "minw_24", "minw_25",
+                    "minw_26", "minw_27", "minw_28", "minw_29", "minw_30",
+                    "minw_31", "minw_32", "minw_33"),
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "minw_attn",
+    vars_numeric_new = c("minw_01", "minw_02", "minw_03", "minw_04", "minw_05",
+                         "minw_06", "minw_07", "minw_08", "minw_09", "minw_10",
+                         "minw_11", "minw_12", "minw_13", "minw_14", "minw_15",
+                         "minw_16", "minw_17", "minw_18", "minw_19", "minw_20",
+                         "minw_21", "minw_22", "minw_23", "minw_24", "minw_25",
+                         "minw_26", "minw_27", "minw_28", "minw_29", "minw_30",
+                         "minw_31", "minw_32", "minw_33", "minw_attn"),
+    vars_minusone = c("minw_01_num", "minw_02_num", "minw_03_num", 
+                      "minw_04_num", "minw_05_num", "minw_06_num", 
+                      "minw_07_num", "minw_08_num", "minw_09_num", 
+                      "minw_10_num", "minw_11_num", "minw_12_num", 
+                      "minw_13_num", "minw_14_num", "minw_15_num", 
+                      "minw_16_num", "minw_17_num", "minw_18_num", 
+                      "minw_19_num", "minw_20_num", "minw_21_num", 
+                      "minw_22_num", "minw_23_num", "minw_24_num", 
+                      "minw_25_num", "minw_26_num", "minw_27_num", 
+                      "minw_28_num", "minw_29_num", "minw_30_num", 
+                      "minw_31_num", "minw_32_num", "minw_33_num", 
+                      "minw_attn_num")
+  )
+
+glimpse(d_minw)
+```
+
+```{r}
+# sen scale
+d_sen <- d_merge %>%
+  filter(scale %in% c("sen")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+# recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("sen")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_sen <- d_sen %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    vars_agree = c("sen_01", "sen_02", "sen_03", "sen_04", "sen_05", "sen_06",
+                   "sen_07", "sen_08", "sen_09", "sen_10", "sen_11", "sen_12",
+                   "sen_13", "sen_14", "sen_15", "sen_16", "sen_17", "sen_18",
+                   "sen_19", "sen_20", "sen_21", "sen_22", "sen_23", "sen_24",
+                   "sen_25", 
+                   # "sen_26", # seems to be missing! 
+                   "sen_27", "sen_28", "sen_29", "sen_30",
+                   "sen_31", "sen_32", "sen_33"),
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "sen_attn",
+    vars_numeric_new = c("sen_01", "sen_02", "sen_03", "sen_04", "sen_05", 
+                         "sen_06", "sen_07", "sen_08", "sen_09", "sen_10", 
+                         "sen_11", "sen_12", "sen_13", "sen_14", "sen_15", 
+                         "sen_16", "sen_17", "sen_18", "sen_19", "sen_20", 
+                         "sen_21", "sen_22", "sen_23", "sen_24", "sen_25", 
+                         # "sen_26", # seems to be missing! 
+                         "sen_27", "sen_28", "sen_29", "sen_30",
+                         "sen_31", "sen_32", "sen_33", "sen_attn"),
+    vars_minusone = "sen_attn_num"
+  )
+
+glimpse(d_sen)
+```
+
+```{r}
+# sen2 scale
+d_sen2 <- d_merge %>%
+  filter(scale %in% c("sen2")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+# recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("sen2")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_sen2 <- d_sen2 %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    vars_agree = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05", 
+                   "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10", 
+                   "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15", 
+                   "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20", 
+                   "sen2_21"),
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "sen2_attn",
+    vars_numeric_new = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05", 
+                   "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10", 
+                   "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15", 
+                   "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20", 
+                   "sen2_21", "sen2_attn"),
+    vars_minusone = "sen2_attn_num"
+  )
+
+glimpse(d_sen2)
+```
+
+```{r}
+# spev scale
+d_spev <- d_merge %>%
+  filter(scale %in% c("spev")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+# recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("spev")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_spev <- d_spev %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    # vars_agree = XX,
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    vars_never3 = c("spev_01", "spev_02", "spev_03", "spev_04", "spev_05",
+                    "spev_06", "spev_07", "spev_08", "spev_09", "spev_10",
+                    "spev_11", "spev_12", "spev_13", "spev_14", "spev_15",
+                    "spev_16", "spev_17", "spev_18", "spev_19", "spev_20",
+                    "spev_21", "spev_22"),
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    vars_attn = "spev_attn",
+    vars_numeric_new = c("spev_01", "spev_02", "spev_03", "spev_04", "spev_05",
+                         "spev_06", "spev_07", "spev_08", "spev_09", "spev_10",
+                         "spev_11", "spev_12", "spev_13", "spev_14", "spev_15",
+                         "spev_16", "spev_17", "spev_18", "spev_19", "spev_20",
+                         "spev_21", "spev_22", "spev_attn"),
+    vars_minusone = "spev_attn_num"
+  )
+
+glimpse(d_spev)
+```
+
+```{r}
+# tat scale
+d_tat <- d_merge %>%
+  filter(scale %in% c("tat")) %>% # limit to just this scale
+  select(-scale, -question_text) %>% # get rid of extra variables
+  spread(question_label_universal, response)# transposte the dataframe
+# recode variables the way we want to!
+
+# check out the answer options to figure out how to recode (uncomment to look)
+# question_key %>%
+#   filter(scale %in% c("tat")) %>% # limit to just this scale
+#   distinct(question_label_universal, answer_options) %>%
+#   arrange(answer_options)
+
+# do the recoding
+d_tat <- d_tat %>%
+  recode_fun(
+    # vars_factor = XX,
+    # vars_numeric = XX,
+    # vars_logical = XX,
+    # vars_factorYN = XX,
+    vars_agree = c("tat_01", "tat_02", "tat_03", "tat_04", "tat_05", "tat_06", 
+                   "tat_07", "tat_08", "tat_09", "tat_10", "tat_11", "tat_12", 
+                   "tat_13", "tat_14", "tat_15", "tat_16", "tat_17", "tat_18", 
+                   "tat_19", "tat_20", "tat_21", "tat_22", "tat_23", "tat_24", 
+                   "tat_25", "tat_26", "tat_27", "tat_28", "tat_29", "tat_30"),
+    # vars_agree2 = XX,
+    # vars_never = XX,
+    # vars_never2 = XX,
+    # vars_never3 = XX,
+    # vars_never4 = XX,
+    # vars_close = XX,
+    # vars_ses = XX,
+    # vars_attn = XX,
+    vars_numeric_new = c("tat_01", "tat_02", "tat_03", "tat_04", "tat_05",
+                         "tat_06", "tat_07", "tat_08", "tat_09", "tat_10",
+                         "tat_11", "tat_12", "tat_13", "tat_14", "tat_15",
+                         "tat_16", "tat_17", "tat_18", "tat_19", "tat_20",
+                         "tat_21", "tat_22", "tat_23", "tat_24", "tat_25",
+                         "tat_26", "tat_27", "tat_28", "tat_29", "tat_30") # ,
+    # vars_minusone = XX
+  )
+
+glimpse(d_tat)
+```
+
+And put them back together:
+
+```{r, message = FALSE}
+d_all <- d_demo %>%
+  full_join(d_info) %>%
+  full_join(d_dse) %>%
+  full_join(d_enco) %>%
+  full_join(d_exwl) %>%
+  full_join(d_her) %>%
+  full_join(d_her2) %>%
+  full_join(d_invo) %>%
+  full_join(d_meta) %>%
+  full_join(d_minw) %>%
+  full_join(d_sen) %>%
+  full_join(d_sen2) %>%
+  full_join(d_spev) %>%
+  full_join(d_tat)
+
+# d_all[is.na(d_all)] <- 99 # this is one way we could replace "NA" with 99
+```
+
+Whoohoo!
+
+## One last modification to the question key
+
+Let's get those answer options in the right order:
+
+```{r, message = FALSE, warning = FALSE}
+question_answers2 <- data.frame(question_label_universal = character(),
+                                answer_options = character())
+
+for(i in levels(factor(d_merge$question_label_universal))) {
+  question_lab <- i
+  if(is.factor(d_all[,i])){
+    answer_opts <- levels(d_all[,i]) %>% unique() %>% paste(collapse = "; ")
+  } else {
+    answer_opts <- with(d_merge %>%
+                          filter(question_label_universal == i),
+                        levels(factor(response))) %>%
+      paste(collapse = "; ")
+  }
+  
+  data <- data.frame(question_label_universal = question_lab,
+                     answer_options = answer_opts)
+  
+  question_answers2 <- question_answers2 %>%
+    full_join(data.frame(question_label_universal = question_lab,
+                         answer_options = answer_opts))
+}
+
+question_answers2 <- question_answers2 %>%
+  mutate_all(funs(. %>% str_replace_all("^; ", "")))
+
+question_key <- question_key %>%
+  select(-answer_options) %>%
+  filter(question_label_universal != "demo_rlgn_8_TEXT") %>% # get rid of write-in
+  full_join(question_answers2)
+
+# uncomment to look
+# question_key
+```
+
+## Checking for problems
+
+Let's check for problems...
+
+### Duplicates (again)
+
+First, once again, let's check for duplicate subjects - for the most part (but with some exceptions), we should only have one entry per the combination of subject and batch:
+
+```{r}
+# who are the duplicates?
+d_all %>%
+  count(subj, packet, version, batc) %>%
+  filter(n > 1) %>%
+  arrange(desc(n))
+
+# are there any that we didn't find above?
+dup_subj5 <- d_all %>%
+  count(subj, packet, version, batc) %>%
+  filter(n > 1) %>%
+  arrange(desc(n)) %>%
+  filter(!subj %in% dup_subj2$subj)
+
+dup_subj5
+```
+
+Looks like there are a few people here that we didn't find earlier. Let's check out what's going on with them:
+
+```{r}
+d_all %>%
+  filter(subj %in% dup_subj5$subj) %>%
+  distinct(subj, packet, version, batc, entr, date)
+```
+
+Again, looks like maybe they were entered twice but the "batch" was incorrectly labeled as "first" both times or "second" both times. I'll correct them by hand here.
+
+```{r}
+d_all$batc[d_all$subj == "40122" &
+             d_all$packet == "2" &
+             d_all$version == "1" &
+             d_all$date == "2018-01-23"] <- "second"
+
+d_all$batc[d_all$subj == "40138" &
+             d_all$packet == "2" &
+             d_all$version == "2" &
+             d_all$date == "2017-11-30"] <- "second"
+
+d_all$batc[d_all$subj == "40144" &
+             d_all$packet == "2" &
+             d_all$version == "2" &
+             d_all$date == "2018-01-23"] <- "second"
+
+d_all$batc[d_all$subj == "40236" &
+             d_all$packet == "3" &
+             d_all$version == "2" &
+             d_all$date == "2018-01-24"] <- "second"
+
+d_all$batc[d_all$subj == "50160" &
+             d_all$packet == "2" &
+             d_all$version == "2" &
+             d_all$date == "2018-01-25"] <- "second"
+
+dup_subj6 <- d_all %>%
+  distinct(subj, packet, version, batc, entr, date) %>%
+  arrange(subj, packet, version, batc, entr, date) %>%
+  filter(subj %in% dup_subj$subj) %>%
+  count(packet, version, batc, subj) %>%
+  filter(n > 1)
+
+dup_subj6
+```
+
+Ok, all cleared up :)
+
+### Did we get everybody?
+
+Another thing we care about is that we have all the people we started out with. I'm not sure how many you were expecting, but you can compare them to these numbers:
+
+```{r}
+d_all %>% distinct(subj, packet, version, batc) %>% count(packet, version, batc) 
+```
+
+# Exporting the data
+
+Our last step is to export the data file, as well as the question key:
+
+```{r}
+write.csv(d_all, "./packets_data.csv")
+write.csv(question_key, "./question_key_R.csv")
+```
+
+
