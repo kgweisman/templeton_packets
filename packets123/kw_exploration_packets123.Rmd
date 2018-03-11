@@ -1,0 +1,258 @@
+---
+title: 'SC data entry: Packets 1-3'
+subtitle: 'KW initial exploration (updated with data from 2018-01-31)'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This is a document describing Kara's initial exploration of the data from Packets 1-3 (!!!).
+
+# Setup
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data
+d_wide <- read_csv("./packets123_data_byquestion_wide.csv")
+d_wide_subscale <- read_csv("./packets123_data_bysubscale_wide.csv")
+d_long <- read_csv("./packets123_data_byquestion_long.csv")
+d_long_subscale <- read_csv("./packets123_data_bysubscale_long.csv")
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+# Look at differences by site
+
+```{r}
+d_long_subscale_boot <- d_long_subscale %>%
+  filter(!is.na(sum_score)) %>%
+  group_by(ctry, packet, subscale) %>%
+  do(data.frame(rbind(smean.cl.boot(.$sum_score)))) %>%
+  ungroup() %>%
+  filter(subscale != "attn") %>%
+  left_join(d_long_subscale %>%
+              filter(!is.na(sum_score)) %>%
+              count(ctry, packet, subscale)) %>%
+  mutate(packet = paste("packet", packet),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")))
+```
+
+```{r, fig.width = 7, fig.asp = 1.3}
+ggplot(d_long_subscale_boot %>% 
+         mutate(packet = gsub("packet ", "P", packet)),
+       aes(x = ctry, y = Mean, color = ctry)) +
+  facet_wrap(~ reorder(interaction(packet, subscale, sep = ": "), 
+                       as.numeric(factor(packet))), 
+             ncol = 5, scales = "free") +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  scale_x_discrete(expand = c(0, 1)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "top") +
+  labs(title = "mean scores by site",
+       subtitle = "ordered by packet (P1, P2, P3)\nerror bars are bootstrapped 95% confidence intervals",
+       x = "site", color = "site",
+       y = "mean score (range varies by subscale)")
+```
+
+# Look at correlations among subscales by site
+
+```{r, fig.width = 7, fig.asp = 1}
+d_long_subscale_boot %>%
+  mutate(subscale = ifelse(grepl("invo_hardy_bentall", subscale),
+                           paste(subscale,
+                                 gsub("packet ", "p", packet),
+                                 sep = "_"),
+                           subscale)) %>%
+  distinct(ctry, subscale, Mean) %>%
+  ungroup() %>%
+  spread(subscale, Mean) %>%
+  data.frame() %>%
+  column_to_rownames("ctry") %>%
+  cor() %>%
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "correlations among mean subscale scores, by site",
+       x = "",
+       y = "")
+```
+
+# Cluster analysis
+
+```{r}
+cor_by_site <- d_long_subscale_boot %>%
+  mutate(subscale = ifelse(grepl("invo_hardy_bentall", subscale),
+                           paste(subscale,
+                                 gsub("packet ", "p", packet),
+                                 sep = "_"),
+                           subscale)) %>%
+  distinct(ctry, subscale, Mean) %>%
+  filter(subscale != "invo_hardy_bentall_p3") %>%
+  ungroup() %>%
+  spread(subscale, Mean) %>%
+  data.frame() %>%
+  column_to_rownames("ctry")
+```
+
+## ... of subscales
+
+```{r, fig.width = 4, fig.asp = 0.6}
+clust_subscales <- hclust(dist(t(cor_by_site)))
+ggdendrogram(clust_subscales) +
+  labs(title = "hierarchical cluster of subscales",
+       subtitle = "using mean subscale scores by site")
+```
+
+## ... of sites
+
+```{r, fig.width = 2, fig.asp = 0.6}
+clust_subscales <- hclust(dist(cor_by_site))
+ggdendrogram(clust_subscales) +
+  labs(title = "hierarchical cluster of sites",
+       subtitle = "using mean subscale scores by site")
+```
+
+# Look at correlations among subscales by individuals
+
+## Packet 1
+
+```{r fig.width = 3, fig.asp = 1}
+d_long_subscale %>%
+  filter(packet == 1, !is.na(sum_score)) %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc, attn)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKET 1: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```
+
+## Packet 2
+
+```{r fig.width = 3, fig.asp = 1}
+d_long_subscale %>%
+  filter(packet == 2, !is.na(sum_score)) %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc, attn)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKET 2: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```
+
+## Packet 3
+
+```{r fig.width = 4, fig.asp = 1}
+d_long_subscale %>%
+  filter(packet == 3, !is.na(sum_score)) %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc, attn)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKET 3: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```
+
+## All packets
+
+*Note that some of these pairs of subscales probably have very few observations going into these correlations! Take this with a grain of salt.*
+
+```{r, fig.width = 6, fig.asp = 1}
+d_long_subscale %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc, attn)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKETS 1-3: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```

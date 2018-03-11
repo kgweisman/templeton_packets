@@ -2,5 +2,7 @@
 *.jpg
 *.jpeg
 *.png
+*.csv
+*.doc*
 
 *from Nikki*

@@ -183,7 +183,7 @@ names(selfv1_raw)
 
 # look at the whole dataframe in RStudio (like you would in Excel)
 # uncomment to look
-View(selfv1_raw)
+# View(selfv1_raw)
 ```
 
 Often there are "encoding" problems (e.g., lots of `\r`s showing up, and some weird characters, like `äóî`) - this is a problem with Qualtrics that I haven't for the life of me been able to solve! Let's try to fix them here:
@@ -810,9 +810,100 @@ There are two big problems here:
 3. The same question text being associated with different labels across versions; and
 4. The multiple answers issues. 
 
+Here, I've decided to eliminate the multiple answers situation from the question key, and only keep the "main" question for each item in the Taves scale:
 
-**I'M GOING TO HOLD OFF ON SOLVING THIS RIGHT NOW**
+```{r}
+question_key_taves <- question_key_taves %>%
+  filter(!grepl("_..._.", question_label_universal))
+```
 
+Let's check again:
+
+```{r}
+# look for duplicates - this would indicate there's some discrepancy across versions
+# first, questions that share a label but have different texts
+dup_label_taves3 <- question_key_taves %>% # start with the question key
+  distinct(question_label_universal, question_text) %>% # include only distinct combinations of question_label and question_text
+  count(question_label_universal) %>% # count how many times each question_label appears
+  filter(n > 1) %>% # only include things that appear more than once (potential problems)
+  data.frame() # make it a dataframe
+
+# next, questions that share a text but have different labels
+dup_text_taves3 <- question_key_taves %>% 
+  filter(question_text != "", !is.na(question_text)) %>% # exclude questions that have no quesiton text
+  distinct(question_label_universal, question_text) %>% 
+  count(question_text) %>% # count how many times each question_text appears
+  filter(n > 1) %>% 
+  data.frame()
+
+# uncomment to look
+dup_label_taves3 %>% arrange(question_label_universal)
+dup_text_taves3 %>% arrange(question_text)
+```
+
+STILL some things to work out.
+
+```{r}
+# uncomment to look
+question_key_taves %>% # start with question_key_taves
+  filter(question_label_universal %in% dup_label_taves3$question_label_universal | # include only questions that either appear in the list of duplicate labels...
+           question_text %in% dup_text_taves3$question_text) %>% # ... or in the list of duplicate texts
+  arrange(question_text, question_label_universal) # sort
+```
+
+5. Still, pairs of questions are associated with the same text. Let's deal with that:
+
+```{r}
+dup_text_taves3_fix <- dup_text_taves3 %>% 
+  distinct() %>%
+  mutate(question_text = gsub("â\u0080\u009c", "'", question_text),
+         question_text = gsub("â\u0080\u009d", "'", question_text),
+         question_text = gsub("^.*\\[bodily sensations e.g. goosebumps\\]$",
+                              "[bodily sensations e.g. goosebumps]",
+                              question_text)) %>%
+  rownames_to_column("number") %>%
+  mutate(question_label_universal2 = paste("taves_universal",
+                                           number, sep = "_")) %>%
+  select(question_label_universal2, question_text)
+  
+question_key_taves <- question_key_taves %>%
+  mutate(question_text = gsub("â\u0080\u009c", "'", question_text),
+         question_text = gsub("â\u0080\u009d", "'", question_text),
+         question_text = gsub("^.*\\[bodily sensations e.g. goosebumps\\]$",
+                              "[bodily sensations e.g. goosebumps]",
+                              question_text)) %>%
+  full_join(dup_text_taves3_fix) %>%
+  mutate(question_label_universal = 
+           ifelse(question_text %in% dup_text_taves3_fix$question_text, 
+                  question_label_universal2, question_label_universal)) %>%
+  select(-question_label_universal2)
+```
+
+Let's check again:
+
+```{r}
+# look for duplicates - this would indicate there's some discrepancy across versions
+# first, questions that share a label but have different texts
+dup_label_taves4 <- question_key_taves %>% # start with the question key
+  distinct(question_label_universal, question_text) %>% # include only distinct combinations of question_label and question_text
+  count(question_label_universal) %>% # count how many times each question_label appears
+  filter(n > 1) %>% # only include things that appear more than once (potential problems)
+  data.frame() # make it a dataframe
+
+# next, questions that share a text but have different labels
+dup_text_taves4 <- question_key_taves %>% 
+  filter(question_text != "", !is.na(question_text)) %>% # exclude questions that have no quesiton text
+  distinct(question_label_universal, question_text) %>% 
+  count(question_text) %>% # count how many times each question_text appears
+  filter(n > 1) %>% 
+  data.frame()
+
+# uncomment to look
+dup_label_taves4 %>% arrange(question_label_universal)
+dup_text_taves4 %>% arrange(question_text)
+```
+
+YES.
 
 ### Packet: thinkbel
 
@@ -986,31 +1077,15 @@ dup_text_thinkbel3 %>% arrange(question_text)
 
 Ok, all set!
 
+### All together now...
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+question_key <- question_key_self %>%
+  full_join(question_key_sleep) %>%
+  full_join(question_key_sponth) %>%
+  full_join(question_key_taves) %>%
+  full_join(question_key_thinkbel)
+```
 
 ## The (almost) final master list (yay!)
 
@@ -1043,11 +1118,11 @@ packet_tidy_fun <- function(df, packet, version){
   # tidy it up!
   df_tidy <- df_tidy %>%
     mutate_all(funs(as.character)) %>%
-    mutate(demo_rlgn = # deal with religion write-ins!
-             ifelse(grepl("please enter", tolower(demo_rlgn)),
-                    demo_rlgn_8_TEXT,
-                    demo_rlgn)) %>%
-    select(-demo_rlgn_8_TEXT) %>%
+    # mutate(demo_rlgn = # deal with religion write-ins!
+    #          ifelse(grepl("please enter", tolower(demo_rlgn)),
+    #                 demo_rlgn_8_TEXT,
+    #                 demo_rlgn)) %>%
+    # select(-demo_rlgn_8_TEXT) %>%
     gather(question_label, response, 
            -subj, -batc, -entr, -date) %>% # make it so that instead of having one row for every subject, we have one row for every question for every subject for every batch of data entry
     mutate(question_label = gsub("p.v._", "", question_label),
@@ -1068,12 +1143,37 @@ packet_tidy_fun <- function(df, packet, version){
     distinct()
 }
 
-p1v1_tidy <- packet_tidy_fun(p1v1_encoded, packet = 1, version = 1)
-p1v2_tidy <- packet_tidy_fun(p1v2_encoded, packet = 1, version = 2)
-p2v1_tidy <- packet_tidy_fun(p2v1_encoded, packet = 2, version = 1)
-p2v2_tidy <- packet_tidy_fun(p2v2_encoded, packet = 2, version = 2)
-p3v1_tidy <- packet_tidy_fun(p3v1_encoded, packet = 3, version = 1)
-p3v2_tidy <- packet_tidy_fun(p3v2_encoded, packet = 3, version = 2)
+# XXXXXX
+
+selfv1_tidy <- packet_tidy_fun(selfv1_encoded, 
+                               packet = "self", version = "1")
+selfv2_tidy <- packet_tidy_fun(selfv2_encoded,
+                               packet = "self", version = "2")
+sleepv1_tidy <- packet_tidy_fun(sleepv1_encoded,
+                                packet = "sleep", version = "1")
+sleepv2_tidy <- packet_tidy_fun(sleepv2_encoded,
+                                packet = "sleep", version = "2")
+sponthv1_tidy <- packet_tidy_fun(sponthv1_encoded,
+                                 packet = "sponth", version = "1")
+sponthv2_tidy <- packet_tidy_fun(sponthv2_encoded,
+                                 packet = "sponth", version = "2")
+tavesv1_tidy <- packet_tidy_fun(tavesv1_encoded,
+                                packet = "taves", version = "1")
+tavesv2_tidy <- packet_tidy_fun(tavesv2_encoded,
+                                packet = "taves", version = "2")
+thinkbel1vA_tidy <- packet_tidy_fun(thinkbel1vA_encoded,
+                                    packet = "thinkbel", version = "1A")
+thinkbel1vB_tidy <- packet_tidy_fun(thinkbel1vB_encoded,
+                                    packet = "thinkbel", version = "1B")
+thinkbel2vA_tidy <- packet_tidy_fun(thinkbel2vA_encoded,
+                                    packet = "thinkbel", version = "2A")
+thinkbel2vB_tidy <- packet_tidy_fun(thinkbel2vB_encoded,
+                                    packet = "thinkbel", version = "2B")
+thinkbel3vA_tidy <- packet_tidy_fun(thinkbel3vA_encoded,
+                                    packet = "thinkbel", version = "3A")
+thinkbel3vB_tidy <- packet_tidy_fun(thinkbel3vB_encoded,
+                                    packet = "thinkbel", version = "3B")
+
 
 # check them out!
 glimpse(p1v1_tidy)

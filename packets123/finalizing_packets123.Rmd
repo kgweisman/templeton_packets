@@ -1,0 +1,168 @@
+---
+title: 'SC data entry: Packets 1-3'
+subtitle: 'Creating final datasets (updated with data from 2018-01-31)'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This is a document describing how we create the final dataset.
+
+# Setup
+
+```{r}
+# load packages
+library(tidyverse)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data
+d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv")[-1]
+# the "-1" is to get rid of that extra column at the beginning
+```
+
+# Eliminating duplicates
+
+Let's keep only the first entry (i.e., eliminate all double-entered "second batch" entries):
+
+```{r}
+d_tidy1 <- d_all %>%
+  filter(batc == "first")
+
+# check for duplicates
+d_tidy1 %>% 
+  count(subj, packet, version) %>%
+  filter(n > 1)
+```
+
+Looks like this works.
+
+# Reverse-coding
+
+I manually added information about reverse-coding (based on information from Tanya) to our "question key" that we derived from the data-wrangling process. Let's implement reverse-coding (multiplying the numerical code by -1 whenever warranted). For now, I'm just going to keep the "numeric" version of each response:
+
+```{r}
+d_tidy2 <- d_tidy1 %>%
+  select(subj, packet, version, ends_with("_num"))
+names(d_tidy2) <- gsub("_num", "", names(d_tidy2))
+
+d_tidy3 <- d_tidy2 %>% 
+  gather(question_label_universal, response, -subj, -packet, -version) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, question_text, answer_options, 
+                     byhand_coding, byhand_subscale)) %>%
+  mutate(response_coded = ifelse(is.na(byhand_coding) == TRUE, 
+                                 response,
+                                 response * byhand_coding)) %>%
+  select(subj, packet, version, byhand_subscale, 
+         question_label_universal, question_text, answer_options, 
+         byhand_coding, response, response_coded) %>%
+  distinct()
+
+glimpse(d_tidy3)
+```
+
+# Eliminating people who failed attention checks
+
+Let's see how many people failed at least one "attention check":
+
+```{r}
+failed_attn <- d_tidy3 %>%
+  filter(byhand_subscale == "attn" | 
+           grepl("attn", question_label_universal)) %>%
+  filter(!is.na(response_coded)) %>%
+  count(subj, packet, version, response_coded) %>%
+  filter(response_coded == 0)
+failed_attn
+```
+
+Looks like there were a total of `r nrow(failed_attn)` participants who failed at least 1 attention check. Let's remove their data from our dataset (at least for now).
+
+```{r}
+d_tidy4 <- d_tidy3 %>%
+  filter(!subj %in% failed_attn$subj)
+```
+
+# Wide-form data (by question)
+
+For some purposes, we'll want a "wide-form" dataset, where all of the data from a single participant is listed in a single ("wide") row. Let's do that here, making sure to re-add all the info we have about that participant.
+
+```{r}
+d_wide <- d_tidy4 %>%
+  distinct(subj, packet, version, 
+           question_label_universal, response_coded) %>%
+  spread(question_label_universal, response_coded) %>%
+  full_join(d_all %>% select(subj, packet, version, 
+                             demo_chur, demo_ethn, demo_maj, demo_pocc,
+                             demo_rlgn, demo_sex, demo_age,
+                             wher, ctry, recr, whoc)) %>%
+  select(packet, version, subj, ctry, wher, recr, whoc, 
+         starts_with("demo_"), starts_with("dse_"), starts_with("enco"),
+         starts_with("exwl_"), starts_with("her_"), starts_with("her2_"),
+         starts_with("invo_"), starts_with("meta_"), starts_with("minw_"),
+         starts_with("sen_"), starts_with("sen2_"), starts_with("spev_"),
+         starts_with("tat_")) %>%
+  distinct()
+
+glimpse(d_wide)
+```
+
+# Long-form data (by question)
+
+For other purposes, we'll want a "long-form" dataset, where each answer to each question from each participant is on a separate row (making for "long" columns). Let's do that here.
+
+```{r}
+d_long <- d_wide %>%
+  gather(question, response, 
+         -c(packet, version, subj, ctry, wher, recr, whoc)) %>%
+  distinct() %>%
+  mutate(response = as.numeric(response))
+
+glimpse(d_long)
+```
+
+# Long- and wide-form dataset (by subscale)
+
+For still other purposes, we'll want both "long-form" and "wide-form" datasets by subscale summary score, rather than by question. Let's do that.
+
+```{r}
+d_long_subscale <- d_long %>%
+  left_join(question_key %>% 
+              select(question_label_universal, byhand_subscale) %>% 
+              rename(question = question_label_universal,
+                     subscale = byhand_subscale)) %>%
+  filter(!is.na(response)) %>%
+  group_by(packet, version, subj, ctry, wher, recr, whoc, subscale) %>%
+  summarise(sum_score = sum(response)) %>%
+  ungroup() %>%
+  distinct() %>%
+  filter(!is.na(subscale)) %>%
+  complete(subscale, nesting(packet, version, subj, ctry, wher, recr, whoc), 
+           fill = list(sum_score = NA)) %>%
+  ungroup() %>%
+  distinct()
+
+glimpse(d_long_subscale)
+```
+
+```{r}
+d_wide_subscale <- d_long_subscale %>%
+  spread(subscale, sum_score) %>%
+  distinct()
+
+glimpse(d_wide_subscale)
+```
+
+# Saving off files
+
+```{r}
+write_csv(d_wide, "./packets123_data_byquestion_wide.csv")
+write_csv(d_wide_subscale, "./packets123_data_bysubscale_wide.csv")
+write_csv(d_long, "./packets123_data_byquestion_long.csv")
+write_csv(d_long_subscale, "./packets123_data_bysubscale_long.csv")
+```
+
+
