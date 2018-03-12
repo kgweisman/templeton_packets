@@ -95,16 +95,19 @@ d_wide <- d_tidy4 %>%
   distinct(subj, packet, version, 
            question_label_universal, response_coded) %>%
   spread(question_label_universal, response_coded) %>%
-  full_join(d_all %>% select(subj, packet, version, 
-                             demo_chur, demo_ethn, demo_maj, demo_pocc,
-                             demo_rlgn, demo_sex, demo_age,
-                             wher, ctry, recr, whoc)) %>%
+  left_join(d_all %>%
+              filter(batc == "first") %>%
+              distinct(subj, packet, version,
+                       demo_chur, demo_ethn, demo_maj, demo_pocc,
+                       demo_rlgn, demo_sex, demo_age,
+                       wher, ctry, recr, whoc)) %>%
   select(packet, version, subj, ctry, wher, recr, whoc, 
          starts_with("demo_"), starts_with("dse_"), starts_with("enco"),
          starts_with("exwl_"), starts_with("her_"), starts_with("her2_"),
          starts_with("invo_"), starts_with("meta_"), starts_with("minw_"),
          starts_with("sen_"), starts_with("sen2_"), starts_with("spev_"),
          starts_with("tat_")) %>%
+  ungroup() %>%
   distinct()
 
 glimpse(d_wide)
@@ -134,18 +137,26 @@ d_long_subscale <- d_long %>%
               select(question_label_universal, byhand_subscale) %>% 
               rename(question = question_label_universal,
                      subscale = byhand_subscale)) %>%
+  ungroup() %>%
+  distinct() %>%
   filter(!is.na(response)) %>%
   group_by(packet, version, subj, ctry, wher, recr, whoc, subscale) %>%
-  summarise(sum_score = sum(response)) %>%
+  summarise(sum_score = sum(response, na.rm = T)) %>%
   ungroup() %>%
   distinct() %>%
   filter(!is.na(subscale)) %>%
-  complete(subscale, nesting(packet, version, subj, ctry, wher, recr, whoc), 
-           fill = list(sum_score = NA)) %>%
+  complete(subscale, nesting(subj, packet, version, ctry, wher, recr, whoc), 
+           fill = list(sum_score = "NA")) %>%
+  mutate(sum_score = as.numeric(sum_score)) %>%
   ungroup() %>%
   distinct()
 
 glimpse(d_long_subscale)
+
+d_long_subscale %>%
+  group_by(subscale) %>%
+  summarise(min = min(sum_score, na.rm = T),
+            max = max(sum_score, na.rm = T))
 ```
 
 ```{r}
