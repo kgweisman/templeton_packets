@@ -54,9 +54,16 @@ d_tidy3 <- d_tidy2 %>%
   left_join(question_key %>% 
               select(question_label_universal, question_text, answer_options, 
                      byhand_coding, byhand_subscale)) %>%
-  mutate(response_coded = ifelse(is.na(byhand_coding) == TRUE, 
-                                 response,
-                                 response * byhand_coding)) %>%
+  mutate(response_coded = 
+           ifelse(is.na(byhand_coding) == TRUE, response,
+                  ifelse(byhand_subscale %in% 
+                           c("exwl", "her_posey_losch", "minw_epistemic",
+                             "minw_inanimate", "minw_life_events", 
+                             "minw_mental_states", 
+                             "minw_selves_souls_world"),
+                         ifelse(response == 0, 1,
+                                ifelse(response == 1, 0, NA)),
+                         response * byhand_coding))) %>%
   select(subj, packet, version, byhand_subscale, 
          question_label_universal, question_text, answer_options, 
          byhand_coding, response, response_coded) %>%
@@ -156,7 +163,39 @@ glimpse(d_long_subscale)
 d_long_subscale %>%
   group_by(subscale) %>%
   summarise(min = min(sum_score, na.rm = T),
-            max = max(sum_score, na.rm = T))
+            max = max(sum_score, na.rm = T)) %>%
+  mutate(subscale = 
+           factor(subscale,
+                  levels = c("attn", 
+                             "exwl", 
+                             "exwl_extra",
+                             "dse_1to4", 
+                             "dse_5to14", 
+                             "dse_5to14_thai",
+                             "dse_15to16", 
+                             "dse_15to16_thai",
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic")))
 ```
 
 ```{r}
