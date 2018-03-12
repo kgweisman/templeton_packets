@@ -6,7 +6,7 @@ output:
   pdf_document: default
 ---
 
-This is a document describing how we clean up and "wrangle" data from Packets 1-3.
+This is a document describing how we clean up and "wrangle" data from Packets 1-3. (Last updated 2018-03-11)
 
 # Setup
 
@@ -877,7 +877,7 @@ recode_fun <- function(df,
     }
   }
 
-  # subtract 1 from (selected) numeric variables (NOTE: here and elsewhere, when the options are basically yes or no, I'm  subtracting 1 so that no = 0; we could do this for all numerically coded variables but I won't right now)
+  # subtract 1 from (selected) numeric variables
   if(is.null(vars_minusone)){} else {
     df_recoded <- df_recoded %>%
       mutate_at(vars(.dots = vars_minusone),
@@ -954,7 +954,7 @@ d_demo <- d_demo %>%
     vars_ses = "demo_ses",
     # vars_attn = XX,
     vars_numeric_new = c("demo_affr", "demo_tung", "demo_howr", "demo_ses"),
-    vars_minusone = c("demo_affr_num", "demo_tung_num")
+    vars_minusone = c("demo_affr_num", "demo_tung_num", "demo_howr", "demo_ses")
     )
 
 glimpse(d_demo)
@@ -1004,7 +1004,17 @@ d_dse <- d_dse %>%
                          "dse_14", "dse_15", "dse_15a", "dse_15b", "dse_15c", 
                          "dse_15e", "dse_15f", "dse_16", "dse_16a", "dse_16b", 
                          "dse_16c", "dse_16e", "dse_16f", "dse_attn"),
-    vars_minusone = "dse_attn_num"
+    vars_minusone = c("dse_01_num", "dse_02_num", "dse_03_num", "dse_04_num", 
+                      "dse_05_num", "dse_06_num", "dse_07_num", "dse_07a_num", 
+                      "dse_07b_num", "dse_07c_num", "dse_07d_num", 
+                      "dse_07f_num", "dse_07g_num", "dse_08_num", "dse_08a_num",
+                      "dse_08b_num", "dse_08c_num", "dse_08d_num", 
+                      "dse_08f_num", "dse_08g_num", "dse_09_num", "dse_10_num", 
+                      "dse_11_num", "dse_12_num", "dse_13_num", "dse_14_num", 
+                      "dse_15_num", "dse_15a_num", "dse_15b_num", "dse_15c_num",
+                      "dse_15e_num", "dse_15f_num", "dse_16_num", "dse_16a_num", 
+                      "dse_16b_num", "dse_16c_num", "dse_16e_num", 
+                      "dse_16f_num", "dse_attn_num")
     )
 
 glimpse(d_dse)
@@ -1042,8 +1052,10 @@ d_enco <- d_enco %>%
     # vars_ses = XX,
     # vars_attn = XX,
     vars_numeric_new = c("enco_01", "enco_02", "enco_03", "enco_04", "enco_05",
-                    "enco_06", "enco_07", "enco_08") #,
-    # vars_minusone = XX
+                         "enco_06", "enco_07", "enco_08"),
+    vars_minusone = c("enco_01_num", "enco_02_num", "enco_03_num", 
+                      "enco_04_num", "enco_05_num", "enco_06_num", 
+                      "enco_07_num", "enco_08_num")
     )
 
 glimpse(d_enco)
@@ -1191,8 +1203,10 @@ d_her2 <- d_her2 %>%
     # vars_ses = XX,
     # vars_attn = XX,
     vars_numeric_new = c("her2_01", "her2_02", "her2_03", "her2_04", "her2_05",
-                         "her2_06", "her2_07", "her2_08", "her2_09") # ,
-    # vars_minusone = XX
+                         "her2_06", "her2_07", "her2_08", "her2_09"),
+    vars_minusone = c("her2_01_num", "her2_02_num", "her2_03_num", 
+                      "her2_04_num", "her2_05_num", "her2_06_num", 
+                      "her2_07_num", "her2_08_num", "her2_09_num")
     )
 
 glimpse(d_her2)
@@ -1243,7 +1257,18 @@ d_invo <- d_invo %>%
                          "invo_newlab_16", "invo_newlab_17", "invo_newlab_18",
                          "invo_newlab_19", "invo_newlab_20", "invo_newlab_21",
                          "invo_newlab_22", "invo_newlab_23", "invo_attn"),
-    vars_minusone = "invo_attn_num"
+    vars_minusone = c("invo_newlab_1_num", "invo_newlab_2_num", 
+                      "invo_newlab_3_num", "invo_newlab_4_num", 
+                      "invo_newlab_5_num", "invo_newlab_6_num",
+                      "invo_newlab_7_num", "invo_newlab_8_num", 
+                      "invo_newlab_9_num", "invo_newlab_10_num", 
+                      "invo_newlab_11_num", "invo_newlab_12_num",
+                      "invo_newlab_13_num", "invo_newlab_14_num",
+                      "invo_newlab_15_num", "invo_newlab_16_num", 
+                      "invo_newlab_17_num", "invo_newlab_18_num",
+                      "invo_newlab_19_num", "invo_newlab_20_num", 
+                      "invo_newlab_21_num", "invo_newlab_22_num", 
+                      "invo_newlab_23_num", "invo_attn_num")
     )
 
 glimpse(d_invo)
@@ -1282,7 +1307,9 @@ d_meta <- d_meta %>%
     vars_attn = "meta_attn",
     vars_numeric_new = c("meta_01", "meta_02", "meta_03", "meta_04", "meta_05",
                          "meta_06", "meta_07", "meta_08", "meta_attn"),
-    vars_minusone = "meta_attn_num"
+    vars_minusone = c("meta_01_num", "meta_02_num", "meta_03_num", 
+                      "meta_04_num", "meta_05_num", "meta_06_num", 
+                      "meta_07_num", "meta_08_num", "meta_attn_num")
     )
 
 glimpse(d_meta)
@@ -1393,7 +1420,16 @@ d_sen <- d_sen %>%
                          # "sen_26", # seems to be missing! 
                          "sen_27", "sen_28", "sen_29", "sen_30",
                          "sen_31", "sen_32", "sen_33", "sen_attn"),
-    vars_minusone = "sen_attn_num"
+    vars_minusone = c("sen_01_num", "sen_02_num", "sen_03_num", "sen_04_num", 
+                      "sen_05_num", "sen_06_num", "sen_07_num", "sen_08_num", 
+                      "sen_09_num", "sen_10_num", "sen_11_num", "sen_12_num", 
+                      "sen_13_num", "sen_14_num", "sen_15_num", "sen_16_num", 
+                      "sen_17_num", "sen_18_num", "sen_19_num", "sen_20_num",
+                      "sen_21_num", "sen_22_num", "sen_23_num", "sen_24_num", 
+                      "sen_25_num",
+                      # "sen_26_num", # seems to be missing!
+                      "sen_27_num", "sen_28_num", "sen_29_num", "sen_30_num",
+                      "sen_31_num", "sen_32_num", "sen_33_num", "sen_attn_num")
   )
 
 glimpse(d_sen)
@@ -1433,12 +1469,19 @@ d_sen2 <- d_sen2 %>%
     # vars_close = XX,
     # vars_ses = XX,
     vars_attn = "sen2_attn",
-    vars_numeric_new = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05", 
-                   "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10", 
-                   "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15", 
-                   "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20", 
-                   "sen2_21", "sen2_attn"),
-    vars_minusone = "sen2_attn_num"
+    vars_numeric_new = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05",
+                         "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10",
+                         "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15",
+                         "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20",
+                         "sen2_21", "sen2_attn"),
+    vars_minusone = c("sen2_01_num", "sen2_02_num", "sen2_03_num", 
+                      "sen2_04_num", "sen2_05_num", "sen2_06_num", 
+                      "sen2_07_num", "sen2_08_num", "sen2_09_num", 
+                      "sen2_10_num", "sen2_11_num", "sen2_12_num", 
+                      "sen2_13_num", "sen2_14_num", "sen2_15_num",
+                      "sen2_16_num", "sen2_17_num", "sen2_18_num", 
+                      "sen2_19_num", "sen2_20_num", "sen2_21_num", 
+                      "sen2_attn_num")
   )
 
 glimpse(d_sen2)
@@ -1483,7 +1526,14 @@ d_spev <- d_spev %>%
                          "spev_11", "spev_12", "spev_13", "spev_14", "spev_15",
                          "spev_16", "spev_17", "spev_18", "spev_19", "spev_20",
                          "spev_21", "spev_22", "spev_attn"),
-    vars_minusone = "spev_attn_num"
+    vars_minusone = c("spev_01_num", "spev_02_num", "spev_03_num", 
+                      "spev_04_num", "spev_05_num", "spev_06_num", 
+                      "spev_07_num", "spev_08_num", "spev_09_num", 
+                      "spev_10_num", "spev_11_num", "spev_12_num", 
+                      "spev_13_num", "spev_14_num", "spev_15_num",
+                      "spev_16_num", "spev_17_num", "spev_18_num", 
+                      "spev_19_num", "spev_20_num", "spev_21_num", 
+                      "spev_22_num", "spev_attn_num")
   )
 
 glimpse(d_spev)
@@ -1528,8 +1578,15 @@ d_tat <- d_tat %>%
                          "tat_11", "tat_12", "tat_13", "tat_14", "tat_15",
                          "tat_16", "tat_17", "tat_18", "tat_19", "tat_20",
                          "tat_21", "tat_22", "tat_23", "tat_24", "tat_25",
-                         "tat_26", "tat_27", "tat_28", "tat_29", "tat_30") # ,
-    # vars_minusone = XX
+                         "tat_26", "tat_27", "tat_28", "tat_29", "tat_30"),
+    vars_minusone = c("tat_01_num", "tat_02_num", "tat_03_num", "tat_04_num", 
+                      "tat_05_num", "tat_06_num", "tat_07_num", "tat_08_num", 
+                      "tat_09_num", "tat_10_num", "tat_11_num", "tat_12_num", 
+                      "tat_13_num", "tat_14_num", "tat_15_num", "tat_16_num", 
+                      "tat_17_num", "tat_18_num", "tat_19_num", "tat_20_num",
+                      "tat_21_num", "tat_22_num", "tat_23_num", "tat_24_num", 
+                      "tat_25_num", "tat_26_num", "tat_27_num", "tat_28_num", 
+                      "tat_29_num", "tat_30_num")
   )
 
 glimpse(d_tat)
