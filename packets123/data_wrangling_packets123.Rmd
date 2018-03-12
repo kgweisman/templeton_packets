@@ -1271,6 +1271,22 @@ d_invo <- d_invo %>%
                       "invo_newlab_23_num", "invo_attn_num")
     )
 
+# center the scale 
+d_invo <- d_invo %>%
+  mutate_at(vars("invo_newlab_1_num", "invo_newlab_2_num",
+                 "invo_newlab_3_num", "invo_newlab_4_num",
+                 "invo_newlab_5_num", "invo_newlab_6_num",
+                 "invo_newlab_7_num", "invo_newlab_8_num",
+                 "invo_newlab_9_num", "invo_newlab_10_num",
+                 "invo_newlab_11_num", "invo_newlab_12_num",
+                 "invo_newlab_13_num", "invo_newlab_14_num",
+                 "invo_newlab_15_num", "invo_newlab_16_num",
+                 "invo_newlab_17_num", "invo_newlab_18_num",
+                 "invo_newlab_19_num", "invo_newlab_20_num",
+                 "invo_newlab_21_num", "invo_newlab_22_num",
+                 "invo_newlab_23_num"),
+            funs(. - 2))
+  
 glimpse(d_invo)
 ```
 
@@ -1311,6 +1327,13 @@ d_meta <- d_meta %>%
                       "meta_04_num", "meta_05_num", "meta_06_num", 
                       "meta_07_num", "meta_08_num", "meta_attn_num")
     )
+
+# center the scale 
+d_meta <- d_meta %>%
+  mutate_at(vars("meta_01_num", "meta_02_num", "meta_03_num", 
+                      "meta_04_num", "meta_05_num", "meta_06_num", 
+                      "meta_07_num", "meta_08_num"),
+            funs(. - 3))
 
 glimpse(d_meta)
 ```
@@ -1431,6 +1454,20 @@ d_sen <- d_sen %>%
                       "sen_27_num", "sen_28_num", "sen_29_num", "sen_30_num",
                       "sen_31_num", "sen_32_num", "sen_33_num", "sen_attn_num")
   )
+
+# center the scale 
+d_sen <- d_sen %>%
+  mutate_at(vars("sen_01_num", "sen_02_num", "sen_03_num", "sen_04_num",
+                 "sen_05_num", "sen_06_num", "sen_07_num", "sen_08_num",
+                 "sen_09_num", "sen_10_num", "sen_11_num", "sen_12_num",
+                 "sen_13_num", "sen_14_num", "sen_15_num", "sen_16_num",
+                 "sen_17_num", "sen_18_num", "sen_19_num", "sen_20_num",
+                 "sen_21_num", "sen_22_num", "sen_23_num", "sen_24_num",
+                 "sen_25_num",
+                 # "sen_26_num", # seems to be missing!
+                 "sen_27_num", "sen_28_num", "sen_29_num", "sen_30_num",
+                 "sen_31_num", "sen_32_num", "sen_33_num"),
+            funs(. - 2))
 
 glimpse(d_sen)
 ```
@@ -1588,6 +1625,18 @@ d_tat <- d_tat %>%
                       "tat_25_num", "tat_26_num", "tat_27_num", "tat_28_num", 
                       "tat_29_num", "tat_30_num")
   )
+
+# center the scale 
+d_tat <- d_tat %>%
+  mutate_at(vars("tat_01_num", "tat_02_num", "tat_03_num", "tat_04_num",
+                 "tat_05_num", "tat_06_num", "tat_07_num", "tat_08_num",
+                 "tat_09_num", "tat_10_num", "tat_11_num", "tat_12_num", 
+                 "tat_13_num", "tat_14_num", "tat_15_num", "tat_16_num", 
+                 "tat_17_num", "tat_18_num", "tat_19_num", "tat_20_num",
+                 "tat_21_num", "tat_22_num", "tat_23_num", "tat_24_num", 
+                 "tat_25_num", "tat_26_num", "tat_27_num", "tat_28_num", 
+                 "tat_29_num", "tat_30_num"),
+            funs(. - 2))
 
 glimpse(d_tat)
 ```
