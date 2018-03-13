@@ -25,10 +25,18 @@ library(ggdendro)
 question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
 
 # load data
-d_wide <- read_csv("./packets123_data_byquestion_wide.csv")
-d_wide_subscale <- read_csv("./packets123_data_bysubscale_wide.csv")
-d_long <- read_csv("./packets123_data_byquestion_long.csv")
-d_long_subscale <- read_csv("./packets123_data_bysubscale_long.csv")
+d_wide <- read_csv("./packets123_data_byquestion_wide.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_wide_subscale <- read_csv("./packets123_data_bysubscale_wide.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long <- read_csv("./packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long_subscale <- read_csv("./packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
 
 # make custom functions
 round2 <- function(x) {format(round(x, 2), digits = 2)}
@@ -57,11 +65,11 @@ These packets included `r length(levels(factor(d_long_subscale$subscale))) - 1` 
 - **Hearing events** (Posey & Losch); range: 0 to 18
 - **Encoding style** (Lewicki); range: 0 to 40
 - **Mind metaphors** (Van Elk); range: -16 to 16
-- **TAT: lack of cognitive confidence** (Wells et al.); range: -12 to 12
-- **TAT: positive beliefs re: worrying** (Wells et al.); range: -12 to 12
-- **TAT: cognitive self-consciousness** (Wells et al.); range: -12 to 12
-- **TAT: uncontrollability/danger** (Wells et al.); range: -12 to 12
-- **TAT: need to control thoughts** (Wells et al.); range: -12 to 12
+- **Metacognition: lack of cognitive confidence** (Wells et al.); range: -12 to 12
+- **Metacognition: positive beliefs re: worrying** (Wells et al.); range: -12 to 12
+- **Metacognition: cognitive self-consciousness** (Wells et al.); range: -12 to 12
+- **Metacognition: uncontrollability/danger** (Wells et al.); range: -12 to 12
+- **Metacognition: need to control thoughts** (Wells et al.); range: -12 to 12
 - **Dualism: mental states** (Weisman); range: 0 to 8
 - **Dualism: life events** (Weisman); range: 0 to 5
 - **Dualism: inanimate consciousness** (Weisman); range: 0 to 6
@@ -136,11 +144,11 @@ d_long_subscale_boot <- d_long_subscale %>%
                              "hearing events",
                              "encoding style",
                              "mind metaphors",
-                             "TAT: lack of cognitive confidence",
-                             "TAT: positive beliefs re: worrying",
-                             "TAT: cognitive self-consciousness",
-                             "TAT: uncontrollability/danger",
-                             "TAT: need to control thoughts",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
                              "dualism: mental states",
                              "dualism: life events",
                              "dualism: inanimate consciousness",
@@ -148,7 +156,7 @@ d_long_subscale_boot <- d_long_subscale %>%
                              "dualism: epistemology")))
 ```
 
-```{r, fig.width = 4, fig.asp = 4}
+```{r, fig.width = 5, fig.asp = 4}
 ggplot(d_long_subscale_boot %>%
          mutate(subscale = 
                   factor(subscale,
@@ -172,11 +180,11 @@ ggplot(d_long_subscale_boot %>%
                              "hearing events\n(posey & losch)\nrange: 0 to 18",
                              "encoding style\n(lewicki)\nrange: 0 to 40",
                              "mind metaphors\n(van elk)\nrange: -16 to 16",
-                             "TAT: lack of cognitive confidence\n(wells et al.)\nrange: -12 to 12",
-                             "TAT: positive beliefs re: worrying\n(wells et al.)\nrange: -12 to 12",
-                             "TAT: cognitive self-consciousness\n(wells et al.)\nrange: -12 to 12",
-                             "TAT: uncontrollability/danger\n(wells et al.)\nrange: -12 to 12",
-                             "TAT: need to control thoughts\n(wells et al.)\nrange: -12 to 12",
+                             "metacog.: lack of cognitive confidence\n(wells et al.)\nrange: -12 to 12",
+                             "metacog.: positive beliefs re: worrying\n(wells et al.)\nrange: -12 to 12",
+                             "metacog.: cognitive self-consciousness\n(wells et al.)\nrange: -12 to 12",
+                             "metacog.: uncontrollability/danger\n(wells et al.)\nrange: -12 to 12",
+                             "metacog.: need to control thoughts\n(wells et al.)\nrange: -12 to 12",
                              "dualism: mental states\n(weisman)\nrange: 0 to 8",
                              "dualism: life events\n(weisman)\nrange: 0 to 5",
                              "dualism: inanimate consciousness\n(weisman)\nrange: 0 to 6",
@@ -285,7 +293,7 @@ d_long_subscale_boot %>%
   mutate(subscaleB_order = as.numeric(factor(as.numeric(factor(subscaleB)),
                                              levels = clust_subscales$order))) %>%
   ggplot(aes(x = reorder(subscaleA, desc(subscaleA_order)), 
-             y = reorder(subscaleB, subscaleB_order), 
+             y = reorder(subscaleB, desc(subscaleB_order)), 
              fill = cor, label = round2(cor))) +
   geom_tile() +
   geom_text(size = 3) +
@@ -443,3 +451,92 @@ d_long_subscale %>%
        x = "",
        y = "")
 ```
+
+# Focusing on absorption & spiritual events
+
+Let's look at relationships between absorption & spiritual events across individual participants, but separating out by site. Tanya's strong prediction would be that higher absorption (as captured by the Tellegen scale, `exwl`) would be correlated with more spiritual events (as indxed by the Luhrmann scale, `spev`).
+
+Here's a test for the overall correlation:
+
+```{r}
+cor1 <- with(d_wide_subscale, cor.test(exwl, spev)); cor1
+```
+
+Looks like this prediction is born out by the data! Absorption was significantly positively correlated with reported spiritual events ($r$ = `r round2(cor1$estimate)`, $p$ = `r ifelse(cor1$p.value < 0.001, "<0.001", format(round(cor1$p.value, 3), digits = 3))`), accounting for approximately `r round(cor1$estimate^2 * 100)`% of the variance in reported spirtual events.
+
+Now let's take a look at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+# effect-code site
+contrasts(d_wide_subscale$ctry) <- cbind(ghana = c(-1, 1, 0, 0, 0),
+                                         thailand = c(-1, 0, 1, 0, 0),
+                                         china = c(-1, 0, 0, 1, 0),
+                                         vanuatu = c(-1, 0, 0, 0, 1))
+
+r1 <- lm(spev ~ exwl_cent * ctry, 
+         d_wide_subscale %>% mutate(exwl_cent = scale(exwl, scale = F)))
+
+r1_coef <- summary(r1)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "exwl_cent",
+                                   "exwl_cent:ctryghana", 
+                                   "exwl_cent:ctrythailand", 
+                                   "exwl_cent:ctrychina", 
+                                   "exwl_cent:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "absorption (overall)",
+                                   "absorption (ghana vs. overall)",
+                                   "absorption (thailand vs. overall)",
+                                   "absorption (china vs. overall)",
+                                   "absorption (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r1_coef)
+```
+
+These results indicate that, as predicted, there was a significant positive relationship between absorption and reported spiritual events, collapsing across sites ($b$ = `r r1_coef["absorption (overall)", "b"]`, $p$ = `r r1_coef["absorption (overall)", "p"]`). The relationship between absorption and spiritual events was particularly strong among participants in Ghana ($b$ = `r r1_coef["absorption (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["absorption (ghana vs. overall)", "p"]`), and (perhaps) weaker than average among participants in China ($b$ = `r r1_coef["absorption (china vs. overall)", "b"]`, $p$ = `r r1_coef["absorption (china vs. overall)", "p"]`).
+
+Note also that there are overall differences in the baserates for reporting spiritual events: Participants in Ghana and Vanuatu generally reported more than average (Ghana: $b$ = `r r1_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (ghana vs. overall)", "p"]`; Vanuatu: $b$ = `r r1_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (vanuatu vs. overall)", "p"]`), while participants in Thailand and China generally reported fewer than average (Thailand: $b$ = `r r1_coef["baserate (thailand vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (thailand vs. overall)", "p"]`; China: $b$ = `r r1_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (china vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+ggplot(d_wide_subscale %>%
+         filter(!is.na(exwl), !is.na(spev)) %>%
+         mutate(ctry = factor(ctry, 
+                              levels = c("us", "ghana", "thailand", 
+                                         "china", "vanuatu")),
+                exwl_cent = scale(exwl, scale = F)),
+       aes(x = exwl, # x = exwl_cent, 
+           y = spev, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r1), aes(x = exwl_cent, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  xlim(0, 34) +
+  ylim(0, 88) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "relationship between absorption & spiritual events, by site",
+       color = "site",
+       x = "absorption (tellegen)",
+       y = "spiritual events (luhrmann)")
+```
+

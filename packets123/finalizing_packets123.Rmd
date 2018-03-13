@@ -53,23 +53,62 @@ d_tidy3 <- d_tidy2 %>%
   gather(question_label_universal, response, -subj, -packet, -version) %>%
   left_join(question_key %>% 
               select(question_label_universal, question_text, answer_options, 
-                     byhand_coding, byhand_subscale)) %>%
-  mutate(response_coded = 
-           ifelse(is.na(byhand_coding) == TRUE, response,
-                  ifelse(byhand_subscale %in% 
-                           c("exwl", "her_posey_losch", "minw_epistemic",
-                             "minw_inanimate", "minw_life_events", 
-                             "minw_mental_states", 
-                             "minw_selves_souls_world"),
-                         ifelse(response == 0, 1,
-                                ifelse(response == 1, 0, NA)),
-                         response * byhand_coding))) %>%
+                     byhand_coding, byhand_subscale))
+
+d_tidy4 <- d_tidy3 %>%
+  # mutate(response_coded = 
+  #          # if it's supposed to be reverse-coded...
+  #          ifelse(byhand_coding == -1,
+  #                 # if it's a dualism subscale...
+  #                 ifelse(grepl("minw_", byhand_subscale) == TRUE,
+  #                        # ...change 0s to 1s...
+  #                        ifelse(response == 0, 
+  #                               1,
+  #                               # ...and 1s to 0s;
+  #                               ifelse(response == 1, 
+  #                                      0,
+  #                                      NA)),
+  #                        # otherwise, if it's a sensory subscale...
+  #                        ifelse(grepl("sen_", byhand_subscale) == TRUE,
+  #                               # ...multiply by -1;
+  #                               response * -1,
+  #                               # otherwise, throw an error
+  #                               "ERROR")),
+  #                 # otherwise, leave it as is
+  #                 response))
+  
+  mutate(response_coded =
+           # if it's NA...
+           ifelse(is.na(byhand_coding) == TRUE,
+                  # ...keep it the same;
+                  response,
+                  # otherwise, if it's NOT reverse-coded...
+                  ifelse(byhand_coding == 1,
+                         # ...keep it the same;
+                         response,
+                         # otherwise, if it IS reverse-coded...
+                         # ...and it's in one of the minw subscales...
+                         ifelse(grepl("minw_", byhand_subscale) == TRUE,
+                                # ...change 0s to 1s...
+                                ifelse(response == 0, 1,
+                                       # ...and 1s to 0s;
+                                       ifelse(response == 1, 0,
+                                              NA)),
+                                # otherwise, if it IS reverse-coded...
+                                # ... and it's in one of the sen subscales...
+                                ifelse(grepl("sen_", byhand_subscale) == TRUE,
+                                       # ...multiply by -1;
+                                       response * -1,
+                                       "ERROR")))))
+
+d_tidy5 <- d_tidy4 %>%
   select(subj, packet, version, byhand_subscale, 
          question_label_universal, question_text, answer_options, 
          byhand_coding, response, response_coded) %>%
+  mutate(response_coded = as.numeric(as.character(response_coded))) %>%
   distinct()
 
-glimpse(d_tidy3)
+glimpse(d_tidy5)
 ```
 
 # Eliminating people who failed attention checks
@@ -77,7 +116,7 @@ glimpse(d_tidy3)
 Let's see how many people failed at least one "attention check":
 
 ```{r}
-failed_attn <- d_tidy3 %>%
+failed_attn <- d_tidy5 %>%
   filter(byhand_subscale == "attn" | 
            grepl("attn", question_label_universal)) %>%
   filter(!is.na(response_coded)) %>%
@@ -89,7 +128,7 @@ failed_attn
 Looks like there were a total of `r nrow(failed_attn)` participants who failed at least 1 attention check. Let's remove their data from our dataset (at least for now).
 
 ```{r}
-d_tidy4 <- d_tidy3 %>%
+d_tidy6 <- d_tidy5 %>%
   filter(!subj %in% failed_attn$subj)
 ```
 
@@ -98,7 +137,7 @@ d_tidy4 <- d_tidy3 %>%
 For some purposes, we'll want a "wide-form" dataset, where all of the data from a single participant is listed in a single ("wide") row. Let's do that here, making sure to re-add all the info we have about that participant.
 
 ```{r}
-d_wide <- d_tidy4 %>%
+d_wide <- d_tidy6 %>%
   distinct(subj, packet, version, 
            question_label_universal, response_coded) %>%
   spread(question_label_universal, response_coded) %>%
