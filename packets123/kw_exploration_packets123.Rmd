@@ -540,3 +540,26 @@ ggplot(d_wide_subscale %>%
        y = "spiritual events (luhrmann)")
 ```
 
+# Dualism
+
+Here's just some initial attempt to take a look at how the dualism questions hang together... more on this later.
+
+```{r, fig.width = 5, fig.asp = 1}
+library(ggdendro)
+temp <- d_long %>%
+  filter(grepl("minw_", question), !is.na(response)) %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+  
+temp_clust <- hclust(dist(t(temp)))
+ggdendrogram(temp_clust, rotate = TRUE)
+```
+
