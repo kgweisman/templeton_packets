@@ -1,0 +1,382 @@
+---
+title: 'Grappling with the "Absorption" scale'
+subtitle: 'Last updated 2018-04-07'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+library(psych)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data (reverse-coded)
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+
+# load data (before reverse-coding)
+d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv")
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+Here we look at the absorption" scale (Tellegen and extra questions; Packet 1) in detail.
+
+# Differences across fieldsites
+
+## Mean scores by site
+
+First, let's look at classic Tellegen absorption scores for participants in each site:
+
+```{r, include = F}
+d_long_subscale_boot <- d_long_subscale %>%
+  filter(!is.na(sum_score)) %>%
+  group_by(ctry, packet, subscale) %>%
+  do(data.frame(rbind(smean.cl.boot(.$sum_score)))) %>%
+  ungroup() %>%
+  filter(subscale != "attn") %>%
+  left_join(d_long_subscale %>%
+              filter(!is.na(sum_score)) %>%
+              count(ctry, packet, subscale)) %>%
+  mutate(packet = paste("packet", packet),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_1to4", 
+                             "dse_5to14", 
+                             "dse_5to14_thai",
+                             "dse_15to16", 
+                             "dse_15to16_thai",
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-4)",
+                             "daily spiritual experiences (#5-14)",
+                             "daily spiritual experiences (#5-14 thai)",
+                             "daily spiritual experiences (#15-16)",
+                             "daily spiritual experiences (#15-16 thai)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology")))
+```
+
+```{r, fig.width = 3, fig.asp = 0.9}
+ggplot(d_long_subscale_boot %>%
+         filter(subscale == "absorption (tellegen)"),
+       aes(x = ctry, y = Mean)) +
+  # geom_hline(aes(yintercept = 0), lty = 2, color = "black") +
+  # geom_hline(aes(yintercept = 36), lty = 2, color = "black") +
+  geom_point(data = d_long_subscale %>%
+               filter(subscale == "exwl",
+                      !is.na(sum_score)),
+             aes(y = sum_score, color = ctry),
+             position = position_jitter(width = 0.3, height = 0.15),
+             alpha = 0.3, size = 1) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  # scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(-0.5, 34.5), breaks = seq(0, 100, 2)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Mean absorption scores by site (Tellegen items)",
+       subtitle = "A higher score indicates more endorsements of 'absorption' experiences (range: 0-36)\nError bars are bootstrapped 95% confidence intervals",
+       x = "Site", color = "Site",
+       y = "Mean score")
+```
+
+Note that this plot includes both average scores for each site (in black), and individual scores for all of the participants in that site (small, colorful points in the background, which are "jittered" around a little so that you can see them all).
+
+I have not looked at this in detail, but eager to hear others' observations.
+
+Let's also look at the "extra" absorpion-like itmes, in the aggregate:
+
+```{r, fig.width = 3, fig.asp = 0.9}
+ggplot(d_long_subscale_boot %>%
+         filter(subscale == "absorption (extra)"),
+       aes(x = ctry, y = Mean)) +
+  # geom_hline(aes(yintercept = 0), lty = 2, color = "black") +
+  # geom_hline(aes(yintercept = 4), lty = 2, color = "black") +
+  geom_point(data = d_long_subscale %>%
+               filter(subscale == "exwl_extra",
+                      !is.na(sum_score)),
+             aes(y = sum_score, color = ctry),
+             position = position_jitter(width = 0.3, height = 0.15),
+             alpha = 0.3, size = 1) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  # scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(-0.5, 4.5), breaks = seq(0, 100, 2)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Mean absorption scores by site (extra items)",
+       subtitle = "A higher score indicates more endorsements of 'absorption-like' experiences (range: 0-4)\nError bars are bootstrapped 95% confidence intervals",
+       x = "Site", color = "Site",
+       y = "Mean score")
+```
+
+Again, this plot includes both average scores for each site (in black), and individual scores for all of the participants in that site (small, colorful points in the background, which are "jittered" around a little so that you can see them all).
+
+And again, I have not looked at this in detail, but eager to hear others' observations.
+
+Now let's look at these differences in more detail using the "raw data" for individual questions, rather than these subscale scores.
+
+## Responses by question, by site
+
+```{r, fig.width = 8, fig.asp = 1.2}
+d_long %>%
+  filter(grepl("exwl_", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response, 
+                           levels = c(0, 1),
+                           labels = c("No", "Yes")),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,80})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(question,
+                                           ": ",
+                                           substr(question_text,
+                                                  start = 1, stop = 10000),
+                                           # "...",
+                                           coding)),
+         subscale = factor(subscale,
+                           levels = c("exwl", 
+                                      "exwl_extra"),
+                           labels = c("Absorption (Tellegen)",
+                                      "Extra"))) %>%
+  count(ctry, subscale, question_text_short, response) %>%
+  spread(response, n) %>%
+  arrange(subscale, ctry, desc(Yes)) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         total_n = No + Yes) %>%
+  gather(response, n, c(No, Yes)) %>%
+  mutate(response = factor(response,
+                           levels = c("No", "Yes")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  ggplot(aes(x = reorder(question_text_short, desc(question_text_short)), 
+             # reorder(question_text_short, desc(order)), 
+             y = n, fill = response)) +
+  facet_grid(subscale ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity") +
+  geom_text(aes(label = paste0(round(n/total_n, 2)*100, "%"), 
+                alpha = response), size = 3) +
+  scale_alpha_discrete(guide = "none", range = c(0, 1)) +
+  scale_fill_brewer(palette = "Blues") +
+  theme_bw() +
+  labs(title = "Responses to 'Absorption' (Tellegen) and 'Absorption-like' (extra) scale items",
+       subtitle = "% corresponds to 'yes' response",
+       x = "", y = "Count of responses", fill = "Response") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+```
+
+I have not looked at this in detail, but eager to hear others' observations.
+
+# Distribution of responses for individual participants, by site
+
+Another thing we might be interested in is how individual participants responded: Were there people who said yes to everything, or no to everything? How do these distributions of responses differ across participants in different sites?
+
+Let's take a look:
+
+```{r, fig.width = 6, fig.asp = 0.35}
+d_long %>%
+  filter(grepl("exwl_", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response, 
+                           levels = c(0, 1),
+                           labels = c("No", "Yes")),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           levels = c("exwl", "exwl_extra"),
+                           labels = c("Absorption (Tellegen)", "Extra"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(No, Yes), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = No + Yes,
+         prop_yes = Yes/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  ggplot(aes(x = prop_yes, fill = ctry)) +
+  facet_grid(subscale ~ ctry, scales = "free", space = "fixed") +
+  geom_histogram(binwidth = 1/18) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many 'yes' responses participants gave to 'Absorption' (Tellegen) and 'Absorption'-like (extra) scale items",
+       x = "Proportion of yes responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+These distributions look pretty typical to me... maybe some evidence of a few more people who said "no" to everything in Ghana than in other places, and a few more people who said "yes" to everything in the US than in other places. I haven't thought about this deeply yet - looking forward to others' thoughts!  
+
+Just for fun, here's another way to look at the same data, overlaying the density distributions for each site on top of each other to see where they seem to be similar/different:
+
+```{r, fig.width = 4, fig.asp = 0.6}
+d_long %>%
+  filter(grepl("exwl_", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response, 
+                           levels = c(0, 1),
+                           labels = c("No", "Yes")),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           levels = c("exwl", "exwl_extra"),
+                           labels = c("Absorption (Tellegen)", "Extra"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(No, Yes), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = No + Yes,
+         prop_yes = Yes/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  ggplot(aes(x = prop_yes, fill = ctry)) +
+  geom_density(alpha = 0.3) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many 'yes' responses participants gave\nto 'Absorption' (Tellegen) and 'Absoprtion'-like (extra) scale items",
+       x = "Proportion of yes responses (at the individual participant level)", y = "Density", fill = "Site") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+Looking pretty darn similar here, with the exception of the VT distribution being shifted slightly higher overall.
