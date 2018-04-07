@@ -1,0 +1,330 @@
+---
+title: 'Ratio of senses'
+subtitle: 'Last updated 2018-04-06'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu")))
+
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu")),
+                  subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_01to14", 
+                             "dse_15to16", 
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-14)",
+                             "daily spiritual experiences (#15-16)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology")))
+d_wide_subscale <- d_long_subscale %>%
+  spread(subscale, sum_score)
+
+# effect-code site
+contrasts(d_wide_subscale$ctry) <- cbind(ghana = c(-1, 1, 0, 0, 0),
+                                         thailand = c(-1, 0, 1, 0, 0),
+                                         china = c(-1, 0, 0, 1, 0),
+                                         vanuatu = c(-1, 0, 0, 0, 1))
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+This is an exploration of the "ratio of senses" ideas pioneered by Josh Brahinsky.
+
+# Packet 1
+
+Josh identified the following items as relevant to different sensory modalities:
+
+- Seeing:
+    - "Spiritual events" (Luhrmann) questions #4, 5 (`spev_04`, `spev_05`)
+    - "Absorption" (Tellegen) questions #17, 22 (`exwl_17`, `exwl_22`)
+- Hearing:
+    - "Spiritual events" (Luhrmann) questions #1, 2, 3 (`spev_01`, `spev_02`, `spev_03`)
+    - "Absorption" (Tellegen) questions #12, 24, 25, 30 (`exwl_12`, `exwl_24`, `exwl_25`, `exwl_30`)
+- Feeling (tactile/bodily/emotional):
+    - "Spiritual events" (Luhrmann) questions #6, 13, 14, 15, 17, 19, 22 (`spev_06`, `spev_13`, `spev_14`, `spev_15`, `spev_17`, `spev_19`, `spev_22`)
+    - "Absorption" (Tellegen) question #29 (`exwl_29`)
+- Smelling:
+    - "Spiritual events" (Luhrmann) question #7 (`spev_07`)
+    - "Absorption" (Tellegen) question #26 (`exwl_26`)
+- Tasting:
+    - "Spiritual events" (Luhrmann) question #8 (`spev_08`)
+- Tangible presence:
+    - "Daily spiritual experiences" (Underwood & Teresi) question #1 (`dse_01`)
+    - "Spiritual events" (Luhrmann) questions #10, 11, 12 (`spev_10`, `spev_11`, `spev_12`)
+    - "Absorption" (Tellegen) questions #14, 31 (`exwl_14`, `exwl_31`)
+- Dreaming:
+    - "Spiritual events" (Luhrmann) question #9 (`spev_09`)
+- Observing/healing:
+    - "Spiritual events" (Luhrmann) question #21 (`spev_21`)
+- Out of body:
+    - "Spiritual events" (Luhrmann) question #16 (`spev_16`)
+
+```{r}
+d_sense <- d_long %>%
+  mutate(sense = case_when(
+    question %in% c("spev_04", "spev_05", "exwl_17", "exwl_22") ~ "seeing",
+    question %in% c("spev_01", "spev_02", "spev_03", "exwl_12", "exwl_24", 
+                    "exwl_25", "exwl_30") ~ "hearing",
+    question %in% c("spev_06", "spev_13", "spev_14", "spev_15", "spev_17", 
+                    "spev_19", "spev_22", "exwl_29") ~ "feeling",
+    question %in% c("spev_07", "exwl_26") ~ "smelling",
+    question %in% c("spev_08") ~ "tasting",
+    question %in% c("dse_01", "spev_10", "spev_11", "spev_12", "exwl_14", 
+                    "exwl_31") ~ "tangible_presence",
+    question %in% c("spev_09") ~ "dreaming",
+    question %in% c("spev_21") ~ "observing_healing",
+    question %in% c("spev_16") ~ "out_of_body"
+  )) %>%
+  filter(!is.na(sense), !is.na(response)) %>%
+  mutate(response = as.numeric(as.character(response)),
+         response_norm = case_when(
+    grepl("exwl", question) ~ response,
+    grepl("spev", question) ~ response/4,
+    grepl("dse", question) ~ response/5
+  )) %>%
+  distinct() %>%
+  mutate(ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         sense = factor(sense,
+                        levels = c("seeing", "hearing", "feeling", "smelling",
+                                   "tasting", "tangible_presence", "dreaming",
+                                   "observing_healing", "out_of_body")))
+  
+d_sense_mean <- d_sense %>%
+  group_by(ctry, sense, subj) %>%
+  summarise(mean = mean(response_norm, na.rm = T)) %>%
+  ungroup() %>%
+  distinct()
+
+d_sense_boot <- d_sense_mean %>%
+  group_by(ctry, sense) %>%
+  do(data.frame(rbind(smean.cl.boot(.$mean)))) %>%
+  ungroup() %>%
+  left_join(d_sense_mean %>% 
+              distinct(ctry, sense, subj) %>% 
+              count(ctry, sense)) %>%
+  left_join(d_sense %>% 
+              distinct(sense, question) %>% 
+              count(sense) %>% 
+              rename(n_question = n)) %>%
+  mutate(ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         sense_label = paste0(gsub("_", " ", sense), "\n(", 
+                              n_question, " questions)"),
+         sense = factor(sense,
+                        levels = c("seeing", "hearing", "feeling", "smelling",
+                                   "tasting", "tangible_presence", "dreaming",
+                                   "observing_healing", "out_of_body")))
+```
+
+Let's check out how endorsements of these different sensory experiences varied across sites.
+
+There are many ways we could do this... here's what I decided on for a first pass. First, I "normalized" all reponses to range from 0-1 (instead of responses to Tellegen ranging from 0-1, responses to Luhrmann rarnging from 0-4, responses to Underwood & Teresi ranging from 0-5, etc.). Then I gave each participant a score on each sense by averaging their responses to all of the questions that Josh deemed relevant to that sense - for some senses (e.g., tasting) this was just a single question, but for other senses (e.g., seeing, hearing feeling) this is an average for many different questions. That seemed like the fairest way to give each sense equal opportunity here, though it's not perfect.
+
+## Means by site
+
+Here are two (equivalent) ways of visualizing these data:
+
+### Comparing sensory modalities within each site
+
+```{r, fig.width = 8, fig.asp = 0.35}
+ggplot(d_sense_boot %>%
+         mutate(sense_label = gsub("\n", " ", sense_label)),
+       aes(x = reorder(sense_label, as.numeric(sense)), 
+           y = Mean, color = ctry)) +
+  facet_wrap(~ ctry, ncol = 5) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower),
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        legend.position = "top") +
+  labs(title = "mean sense scores by site",
+       subtitle = "error bars are bootstrapped 95% confidence intervals",
+       x = "sense", color = "site",
+       y = "mean score (normalized to range from 0-1)")
+```
+
+Check out seeing vs. hearing in Thailand vs. the other sites! Also, the relative emphasis on feeling (compared to, e.g., seeing/hearing) seems to differ in reasonable ways (e.g., relatively more endorsement in Ghana). Smelling is higher in the US than I would have predicted, and lower in Thailand than Felicity might have predicted.
+
+### Comparing sites within a sensory modality
+
+```{r, fig.width = 5, fig.asp = 1}
+ggplot(d_sense_boot,
+       aes(x = ctry, y = Mean, color = ctry)) +
+  facet_wrap(~ reorder(sense_label, as.numeric(sense)), ncol = 3) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower),
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        legend.position = "top") +
+  labs(title = "mean sense scores by site",
+       subtitle = "error bars are bootstrapped 95% confidence intervals",
+       x = "site", color = "site",
+       y = "mean score (normalized to range from 0-1)")
+```
+
+These are the same data, visualized in a different way. Take this with a grain of salt - it might make you miss out on some general response tendencies that are more obvious from the previous visualization (e.g., that people in Ghana and Vanuatu generally responded more positively to all of these items than people in other sites).
+
+## Responses to individual questions
+
+We could (and should) also look at responses to particular items. Let's do it:
+
+```{r, fig.width = 10, fig.asp = 0.6}
+d_sense_plot <- d_sense %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = paste0(question,
+                                      ": ",
+                                      substr(question_text, 
+                                             start = 1, stop = 1000), 
+                                      # "...",
+                                      coding),
+                  sense = factor(sense,
+                                 labels = c("Seeing", "Hearing", "Feeling",
+                                            "Smelling", "Tasting",
+                                            "Tangible presence", "Dreaming",
+                                            "Observing/healing", 
+                                            "Out of body"))) %>%
+  count(ctry, sense, question_text_short, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(`0`:`5`), 
+            funs(replace(., is.na(.), 0))) %>%
+  arrange(sense, ctry, `0`) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         nonzero_n = `1` + `2` + `3` + `4` + `5`,
+         total_n = `0` + `1` + `2` + `3` + `4` + `5`) %>%
+  gather(response, n, c(`0`, `1`, `2`, `3`, `4`, `5`)) %>%
+  mutate(response = factor(response,
+                           levels = c("0", "1", "2", "3", "4", "5")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct()
+
+adjust <- 25
+
+ggplot(d_sense_plot,
+       aes(x = reorder(question_text_short, desc(order)), 
+             y = n, fill = response)) +
+  facet_grid(sense ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity", 
+           color = "black", size = 0.2) +
+  geom_text(data = d_sense_plot %>% 
+              distinct(ctry, sense, question_text_short, order, 
+                       nonzero_n, total_n),
+            aes(y = max(d_sense_plot$total_n) + adjust, fill = NULL,
+                label = paste0(round(nonzero_n/total_n, 2)*100, "%")), 
+            size = 3, hjust = 1) +
+  scale_y_continuous(limits = c(0, max(d_sense_plot$total_n) + adjust)) +
+  scale_fill_brewer(palette = "PuBuGn") +
+  theme_bw() +
+  labs(title = "Responses to 'Senses' items",
+       subtitle = "% corresponds to those giving *non-zero* responses\nNote that different questions had different response scales, including 0-1, 0-4, and 0-5",
+       x = "", y = "Count of responses", fill = "Response") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  guides(fill = guide_legend(nrow = 1)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+
+rm(adjust)
+```
+
+Lots to look through here! Let me know what you see.

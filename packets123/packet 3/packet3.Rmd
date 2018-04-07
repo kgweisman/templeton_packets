@@ -1,0 +1,508 @@
+---
+title: 'Packet 3: Relationships among scales'
+subtitle: 'Last updated 2018-04-05'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"))) %>%
+  # count hardy/bentall from packet 2 for china (same participants)
+  filter(packet == 3 | (ctry == "china" & packet == 2)) %>%
+  mutate(packet = "3mod") %>%
+  distinct()
+
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu")),
+                  subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_01to14", 
+                             "dse_15to16", 
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-14)",
+                             "daily spiritual experiences (#15-16)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology"))) %>%
+  # count hardy/bentall from packet 2 for china (same participants)
+  filter(packet == 3 | (ctry == "china" & packet == 2)) %>%
+  mutate(packet = "3mod") %>%
+  filter(!is.na(sum_score)) %>%
+  distinct()
+
+d_wide_subscale <- d_long_subscale %>%
+  spread(subscale, sum_score)
+
+# effect-code site
+contrasts(d_wide_subscale$ctry) <- cbind(ghana = c(-1, 1, 0, 0, 0),
+                                         thailand = c(-1, 0, 1, 0, 0),
+                                         china = c(-1, 0, 0, 1, 0),
+                                         vanuatu = c(-1, 0, 0, 0, 1))
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+This is an exploration of the relationships among scales included in Packet 3.
+
+# Correlation matrix
+
+First, let's look at the overall correlationships among scores on the various scales included in Packet 3. (These are individual participant-level correlations):
+
+```{r fig.width = 4, fig.asp = 1}
+d_long_subscale %>%
+  filter(grepl("metaphor", subscale) |
+           grepl("metacog", subscale) |
+           grepl("inner", subscale) |
+           grepl("hearing", subscale) |
+           grepl("encoding", subscale) |
+           grepl("dualism", subscale)) %>%
+  filter(!is.na(sum_score), !is.na(subscale), !grepl("VISQ", subscale)) %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  gather(subscale, response, -subj) %>%
+  filter(!is.na(response)) %>%
+  spread(subscale, response) %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  # # corrplot version:
+  # corrplot::corrplot(method = "color", tl.col = "black",
+  #                    addCoef.col = "black", order = "hclust",
+  #                    col = RColorBrewer::brewer.pal(n = 11, name = "PRGn"),
+  #                    title = "\nPACKET 2: correlations among subscales")
+
+  # ggplot version:
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKET 3: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```
+
+From this, we see that several of the scales included in Packet 3 were positively correlated with each other. Unsurprisingly, many of the "dualism" subscales were positively correlated. But we also see some intriguing correlations among the inner speech, hearing events, and encoding style scales - and, surprisingly, endorsement of metaphors of mind? Maybe also some correaltions with uncontrollability and need to control, as well as other metacognition subscales...? Let's check these relationships out in more detail!
+
+*Note: There is a separate document for grappling with the "dualism" scale on its own.*
+
+# Inner speech and hearing events
+
+Here's a test for the overall correlation between inner speech as measured by the Hardy/Bentall scale, and "hearing events" as measured by the Posey & Losch scale:
+
+```{r}
+cor1 <- with(d_wide_subscale, cor.test(`inner speech`, `hearing events`)); cor1
+```
+
+Inner speech (as measured by Hardy/Bentall) was significantly positively correlated with reported hearing events ($r$ = `r round2(cor1$estimate)`, $p$ = `r ifelse(cor1$p.value < 0.001, "<0.001", format(round(cor1$p.value, 3), digits = 3))`), accounting for approximately `r round(cor1$estimate^2 * 100)`% of the variance in reported hearing events.
+
+Now let's take a look at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+r1 <- lm(`hearing events` ~ `inner speech` * ctry, 
+         d_wide_subscale %>% 
+           mutate(`inner speech` = scale(`inner speech`, scale = F)))
+
+r1_coef <- summary(r1)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`inner speech`",
+                                   "`inner speech`:ctryghana", 
+                                   "`inner speech`:ctrythailand", 
+                                   "`inner speech`:ctrychina", 
+                                   "`inner speech`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "HB inner speech (overall)",
+                                   "HB inner speech (ghana vs. overall)",
+                                   "HB inner speech (thailand vs. overall)",
+                                   "HB inner speech (china vs. overall)",
+                                   "HB inner speech (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r1_coef)
+```
+
+These results indicate that there was a significant positive relationship between inner speech (as measured by Hardy/Bentall) and reported hearing events-like events, collapsing across sites ($b$ = `r r1_coef["HB inner speech (overall)", "b"]`, $p$ = `r r1_coef["HB inner speech (overall)", "p"]`). The relationship between inner voice and hearing events was somewhat stronger among participants in Ghana ($b$ = `r r1_coef["HB inner speech (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["HB inner speech (ghana vs. overall)", "p"]`).
+
+Note also that this test picked up on some differences in the baserates for reporting hearing events-like events (controlling for the relationships described above): Participants in Ghana and China seem to have reported fewer than average of these kinds of events (Ghana: $b$ = `r r1_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (ghana vs. overall)", "p"]`; China: $b$ = `r r1_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (china vs. overall)", "p"]`), while participants in Vanuatu seem to have reported more than average (Vanuatu: $b$ = `r r1_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (vanuatu vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+d_wide_subscale %>%
+  filter(!is.na(`inner speech`), !is.na(`hearing events`)) %>%
+  ggplot(aes(x = `inner speech`, # x = exwl_cent,
+             y = `hearing events`, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r1), aes(x = exwl_cent, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(limits = c(-20, 20), breaks = seq(-100, 100, 10)) +
+  scale_y_continuous(limits = c(0, 18), breaks = seq(-100, 100, 2)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "Relationship between inner speech & hearing events, by site",
+       color = "Site",
+       x = "Inner speech (Hardy & Bentall)",
+       y = "Hearing events (Posey & Losch)")
+```
+
+# Inner speech and encoding style
+
+Here's a test for the overall correlation between inner speech as measured by the Hardy/Bentall scale, and "encoding style" (which seems like a kind of hallucination-like event) as measured by the Lewicki scale:
+
+```{r}
+cor2 <- with(d_wide_subscale, cor.test(`inner speech`, `encoding style`)); cor2
+```
+
+Inner speech (as measured by Hardy/Bentall) was significantly positively correlated with reported encoding style ($r$ = `r round2(cor2$estimate)`, $p$ = `r ifelse(cor2$p.value < 0.001, "<0.001", format(round(cor2$p.value, 3), digits = 3))`), accounting for approximately `r round(cor2$estimate^2 * 100)`% of the variance in reported encoding style.
+
+Now let's take a look at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+r2 <- lm(`encoding style` ~ `inner speech` * ctry, 
+         d_wide_subscale %>% 
+           mutate(`inner speech` = scale(`inner speech`, scale = F)))
+
+r2_coef <- summary(r2)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`inner speech`",
+                                   "`inner speech`:ctryghana", 
+                                   "`inner speech`:ctrythailand", 
+                                   "`inner speech`:ctrychina", 
+                                   "`inner speech`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "HB inner speech (overall)",
+                                   "HB inner speech (ghana vs. overall)",
+                                   "HB inner speech (thailand vs. overall)",
+                                   "HB inner speech (china vs. overall)",
+                                   "HB inner speech (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r2_coef)
+```
+
+These results indicate that there was a significant positive relationship between inner speech (as measured by Hardy/Bentall) and reported encoding style events, collapsing across sites ($b$ = `r r2_coef["HB inner speech (overall)", "b"]`, $p$ = `r r2_coef["HB inner speech (overall)", "p"]`). The relationship between inner voice and encoding style was somewhat weaker among participants in Thailand ($b$ = `r r2_coef["HB inner speech (thailand vs. overall)", "b"]`, $p$ = `r r2_coef["HB inner speech (thailand vs. overall)", "p"]`).
+
+Note also that this test picked up on some differences in the baserates for reporting encoding style (controlling for the relationships described above): In contrast to the "hearing events" above, participants in Vanuatu seem to have reported fewer than average of these kinds of events, as did participants in China (Vanuatu: $b$ = `r r2_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (vanuatu vs. overall)", "p"]`; China: $b$ = `r r2_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (china vs. overall)", "p"]`), while participants in Ghana seem to have reported more than average (Ghana: $b$ = `r r2_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (ghana vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+d_wide_subscale %>%
+  filter(!is.na(`inner speech`), !is.na(`encoding style`)) %>%
+  ggplot(aes(x = `inner speech`, # x = exwl_cent,
+             y = `encoding style`, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r2), aes(x = exwl_cent, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(limits = c(-20, 20), breaks = seq(-100, 100, 10)) +
+  scale_y_continuous(limits = c(0, 40), breaks = seq(-100, 100, 10)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "Relationship between inner speech & encoding style, by site",
+       color = "Site",
+       x = "Inner speech (Hardy & Bentall)",
+       y = "Encoding style (Lewicki)")
+```
+
+# Metacognition and inner speech
+
+Here's a series of tests for the overall correlations between various aspets of metacognition (as indexed by the Wells et al. subscales) and inner speech as measured by the Hardy/Bentall scale:
+
+```{r}
+# lack of cognitive confidence
+cor3 <- with(d_wide_subscale, cor.test(`inner speech`, `metacog.: lack of cognitive confidence`)); cor3
+
+# positive beliefs about worrying
+cor4 <- with(d_wide_subscale, cor.test(`inner speech`, `metacog.: positive beliefs re: worrying`)); cor4
+
+# cognitive self-consciousness
+cor5 <- with(d_wide_subscale, cor.test(`inner speech`, `metacog.: cognitive self-consciousness`)); cor5
+
+# uncontrollability/danger
+cor6 <- with(d_wide_subscale, cor.test(`inner speech`, `metacog.: uncontrollability/danger`)); cor6
+
+# need to control thoughts
+cor7 <- with(d_wide_subscale, cor.test(`inner speech`, `metacog.: need to control thoughts`)); cor7
+```
+
+Many aspects of metacognition were significantly positively correlated with inner speech (as measured by Hardy/Bentall) was significantly positively correlated with reported encoding style; in fact, the only one that wasn't "significant" was the lack of cognitive confidence ($r$ = `r round2(cor3$estimate)`, $p$ = `r ifelse(cor3$p.value < 0.001, "<0.001", format(round(cor3$p.value, 3), digits = 3))`). 
+
+The (numerically) strongest relationship was with cognitive self-consciousness ($r$ = `r round2(cor5$estimate)`, $p$ = `r ifelse(cor5$p.value < 0.001, "<0.001", format(round(cor5$p.value, 3), digits = 3))`), accounting for approximately `r round(cor5$estimate^2 * 100)`% of the variance in reported inner speech.
+
+Now let's take a closer look at this particular relationship by looking at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+r3 <- lm(`inner speech` ~ `metacog.: cognitive self-consciousness` * ctry, 
+         d_wide_subscale %>% 
+           mutate(`metacog.: cognitive self-consciousness` = scale(`metacog.: cognitive self-consciousness`, scale = F)))
+
+r3_coef <- summary(r3)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`metacog.: cognitive self-consciousness`",
+                                   "`metacog.: cognitive self-consciousness`:ctryghana", 
+                                   "`metacog.: cognitive self-consciousness`:ctrythailand", 
+                                   "`metacog.: cognitive self-consciousness`:ctrychina", 
+                                   "`metacog.: cognitive self-consciousness`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "cog. self-consciousness (overall)",
+                                   "cog. self-consciousness (ghana vs. overall)",
+                                   "cog. self-consciousness (thailand vs. overall)",
+                                   "cog. self-consciousness (china vs. overall)",
+                                   "cog. self-consciousness (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r3_coef)
+```
+
+These results indicate that there was a significant positive relationship between cognitive self-consciousness and inner speech (as measured by Hardy/Bentall), collapsing across sites ($b$ = `r r3_coef["cog. self-consciousness (overall)", "b"]`, $p$ = `r r3_coef["cog. self-consciousness (overall)", "p"]`). The relationship between this aspect of metacognition and inner speech was stronger among participants in Ghana ($b$ = `r r3_coef["cog. self-consciousness (ghana vs. overall)", "b"]`, $p$ = `r r3_coef["cog. self-consciousness (ghana vs. overall)", "p"]`), and weaker among participants in Thailand ($b$ = `r r3_coef["cog. self-consciousness (thailand vs. overall)", "b"]`, $p$ = `r r3_coef["cog. self-consciousness (thailand vs. overall)", "p"]`).
+
+Note also that this test picked up on some differences in the baserates for inner speech (controlling for the relationships described above): Participants in China and (perhaps) Thailand seem to have reported fewer than average of these kinds of events (China: $b$ = `r r3_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r3_coef["baserate (china vs. overall)", "p"]`; Thailand: $b$ = `r r3_coef["baserate (thailand vs. overall)", "b"]`, $p$ = `r r3_coef["baserate (thailand vs. overall)", "p"]`), while participants in Ghana and (perhaps) Vanuatu seem to have reported more than average (Ghana: $b$ = `r r3_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r3_coef["baserate (ghana vs. overall)", "p"]`; Vanuatu: $b$ = `r r3_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r3_coef["baserate (vanuatu vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+d_wide_subscale %>%
+  filter(!is.na(`metacog.: cognitive self-consciousness`), !is.na(`inner speech`)) %>%
+  ggplot(aes(x = `metacog.: cognitive self-consciousness`, # x = exwl_cent,
+             y = `inner speech`, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r3), aes(x = exwl_cent, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(limits = c(-12, 12), breaks = seq(-100, 100, 4)) +
+  scale_y_continuous(limits = c(-20, 20), breaks = seq(-100, 100, 10)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "Relationship between cognitive self-consciousness & inner speech, by site",
+       color = "Site",
+       x = "Cognitive self-consciousness (Wells et al)",
+       y = "Inner speech (Hardy & Bentall)")
+```
+
+# Metacognition and hearing events
+
+Here's a series of tests for the overall correlations between various aspets of metacognition (as indexed by the Wells et al. subscales) and hearing events:
+
+```{r}
+# lack of cognitive confidence
+cor8 <- with(d_wide_subscale, cor.test(`hearing events`, `metacog.: lack of cognitive confidence`)); cor8
+
+# positive beliefs about worrying
+cor9 <- with(d_wide_subscale, cor.test(`hearing events`, `metacog.: positive beliefs re: worrying`)); cor9
+
+# cognitive self-consciousness
+cor10 <- with(d_wide_subscale, cor.test(`hearing events`, `metacog.: cognitive self-consciousness`)); cor10
+
+# uncontrollability/danger
+cor11 <- with(d_wide_subscale, cor.test(`hearing events`, `metacog.: uncontrollability/danger`)); cor11
+
+# need to control thoughts
+cor12 <- with(d_wide_subscale, cor.test(`hearing events`, `metacog.: need to control thoughts`)); cor12
+```
+
+ALL aspects of metacognition were significantly positively correlated with hearing events (as measured by Hardy/Bentall) were significantly positively correlated with reported encoding style. 
+
+The (numerically) strongest relationship was with uncontrollability/danger ($r$ = `r round2(cor11$estimate)`, $p$ = `r ifelse(cor11$p.value < 0.001, "<0.001", format(round(cor11$p.value, 3), digits = 3))`), accounting for approximately `r round(cor11$estimate^2 * 100)`% of the variance in reported hearing events.
+
+Now let's take a closer look at this particular relationship by looking at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+r4 <- lm(`hearing events` ~ `metacog.: uncontrollability/danger` * ctry, 
+         d_wide_subscale %>% 
+           mutate(`metacog.: uncontrollability/danger` = scale(`metacog.: uncontrollability/danger`, scale = F)))
+
+r4_coef <- summary(r4)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`metacog.: uncontrollability/danger`",
+                                   "`metacog.: uncontrollability/danger`:ctryghana", 
+                                   "`metacog.: uncontrollability/danger`:ctrythailand", 
+                                   "`metacog.: uncontrollability/danger`:ctrychina", 
+                                   "`metacog.: uncontrollability/danger`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "cog. uncontrol/danger (overall)",
+                                   "cog. uncontrol/danger (ghana vs. overall)",
+                                   "cog. uncontrol/danger (thailand vs. overall)",
+                                   "cog. uncontrol/danger (china vs. overall)",
+                                   "cog. uncontrol/danger (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r4_coef)
+```
+
+These results indicate that there was a significant positive relationship between uncontrollability/danger and hearing events (as measured by Hardy/Bentall), collapsing across sites ($b$ = `r r4_coef["cog. uncontrol/danger (overall)", "b"]`, $p$ = `r r4_coef["cog. uncontrol/danger (overall)", "p"]`). The relationship between this aspect of metacognition and hearing events was stronger among participants in Ghana ($b$ = `r r4_coef["cog. uncontrol/danger (ghana vs. overall)", "b"]`, $p$ = `r r4_coef["cog. uncontrol/danger (ghana vs. overall)", "p"]`), and weaker among participants in Thailand ($b$ = `r r4_coef["cog. uncontrol/danger (thailand vs. overall)", "b"]`, $p$ = `r r4_coef["cog. uncontrol/danger (thailand vs. overall)", "p"]`).
+
+Note also that this test picked up on some differences in the baserates for hearing events (controlling for the relationships described above): Participants in Vanuatu seem to have reported more than average of these kinds of events ($b$ = `r r4_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r4_coef["baserate (vanuatu vs. overall)", "p"]`), while participants in Ghana seem to have reported fewer than average (Ghana: $b$ = `r r4_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r4_coef["baserate (ghana vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+d_wide_subscale %>%
+  filter(!is.na(`metacog.: uncontrollability/danger`), !is.na(`hearing events`)) %>%
+  ggplot(aes(x = `metacog.: uncontrollability/danger`, # x = exwl_cent,
+             y = `hearing events`, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r4), aes(x = exwl_cent, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(limits = c(-12, 12), breaks = seq(-100, 100, 4)) +
+  scale_y_continuous(limits = c(0, 18), breaks = seq(-100, 100, 3)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "Relationship between cognitive uncontrollability/danger & hearing events, by site",
+       color = "Site",
+       x = "Cognitive uncontrollability/danger (Wells et al)",
+       y = "Hearing events (Posey & Losch)")
+```
+
+
+
+
+

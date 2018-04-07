@@ -1,0 +1,329 @@
+---
+title: 'Packet 1: Relationships among scales'
+subtitle: 'Last updated 2018-04-05'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"))) %>%
+  filter(packet == 1)
+
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu")),
+                  subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_01to14", 
+                             "dse_15to16", 
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-14)",
+                             "daily spiritual experiences (#15-16)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology"))) %>%
+  filter(packet == 1)
+d_wide_subscale <- d_long_subscale %>%
+  spread(subscale, sum_score)
+
+# effect-code site
+contrasts(d_wide_subscale$ctry) <- cbind(ghana = c(-1, 1, 0, 0, 0),
+                                         thailand = c(-1, 0, 1, 0, 0),
+                                         china = c(-1, 0, 0, 1, 0),
+                                         vanuatu = c(-1, 0, 0, 0, 1))
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+This is an exploration of the relationships among scales included in Packet 1.
+
+# Correlation matrix
+
+First, let's look at the overall correlationships among scores on the various scales included in Packet 1. (These are individual participant-level correlations):
+
+```{r fig.width = 3, fig.asp = 1}
+d_long_subscale %>%
+  filter(packet == 1, !is.na(sum_score), !is.na(subscale)) %>%
+  spread(subscale, sum_score) %>%
+  select(-c(ctry, wher, recr, whoc)) %>%
+  mutate(subj = paste(subj, packet, version, sep = "_")) %>%
+  select(-packet, -version) %>%
+  distinct() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj") %>%
+  cor(use = "pairwise.complete.obs") %>%
+  # # corrplot version:
+  # corrplot::corrplot(method = "color", tl.col = "black",
+  #                    addCoef.col = "black", order = "hclust",
+  #                    col = RColorBrewer::brewer.pal(n = 11, name = "PRGn"),
+  #                    title = "\nPACKET 2: correlations among subscales")
+
+  # ggplot version:
+  data.frame() %>%
+  rownames_to_column("subscaleA") %>%
+  gather(subscaleB, cor, -subscaleA) %>%
+  ggplot(aes(x = subscaleA, y = subscaleB, fill = cor, label = round2(cor))) +
+  geom_tile() +
+  geom_text(size = 3) +
+  scale_fill_distiller(guide = guide_colorbar(barheight = 6),
+                       palette = "RdYlBu", limits = c(-1, 1)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "PACKET 1: correlations among subscales",
+       subtitle = "using pairwise complete observations",
+       x = "",
+       y = "")
+```
+
+From this, we see that several of the scales included in Packet 1 were positively correlated with each other. Less surprisingly, the spiritual events scales were correlated with each other, and the absorption-ish scales were correlated with each other. But we also see some intriguing correlations between these two groups. Let's check these relationships out in more detail!
+
+# Absorption and spiritual events
+
+## ...as indexed by the "Spiritual events" scale (Luhrmann)
+
+Let's look at relationships between absorption & spiritual events across individual participants, but separating out by site. Tanya's strong prediction would be that higher absorption (as captured by the Tellegen scale) would be correlated with more spiritual events (as indxed by the Luhrmann scale).
+
+Here's a test for the overall correlation:
+
+```{r}
+cor1 <- with(d_wide_subscale, cor.test(`absorption (tellegen)`, `spiritual events`)); cor1
+```
+
+Looks like this prediction is born out by the data! Absorption was significantly positively correlated with reported spiritual events ($r$ = `r round2(cor1$estimate)`, $p$ = `r ifelse(cor1$p.value < 0.001, "<0.001", format(round(cor1$p.value, 3), digits = 3))`), accounting for approximately `r round(cor1$estimate^2 * 100)`% of the variance in reported spirtual events.
+
+Now let's take a look at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+# effect-code site
+contrasts(d_wide_subscale$ctry) <- cbind(ghana = c(-1, 1, 0, 0, 0),
+                                         thailand = c(-1, 0, 1, 0, 0),
+                                         china = c(-1, 0, 0, 1, 0),
+                                         vanuatu = c(-1, 0, 0, 0, 1))
+
+r1 <- lm(`spiritual events` ~ `absorption (tellegen)_cent` * ctry, 
+         d_wide_subscale %>% mutate(`absorption (tellegen)_cent` = scale(`absorption (tellegen)`, scale = F)))
+
+r1_coef <- summary(r1)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`absorption (tellegen)_cent`",
+                                   "`absorption (tellegen)_cent`:ctryghana", 
+                                   "`absorption (tellegen)_cent`:ctrythailand", 
+                                   "`absorption (tellegen)_cent`:ctrychina", 
+                                   "`absorption (tellegen)_cent`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "absorption (overall)",
+                                   "absorption (ghana vs. overall)",
+                                   "absorption (thailand vs. overall)",
+                                   "absorption (china vs. overall)",
+                                   "absorption (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r1_coef)
+```
+
+These results indicate that, as predicted, there was a significant positive relationship between absorption and reported spiritual events, collapsing across sites ($b$ = `r r1_coef["absorption (overall)", "b"]`, $p$ = `r r1_coef["absorption (overall)", "p"]`). The relationship between absorption and spiritual events was particularly strong among participants in Ghana ($b$ = `r r1_coef["absorption (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["absorption (ghana vs. overall)", "p"]`), and (perhaps) weaker than average among participants in China ($b$ = `r r1_coef["absorption (china vs. overall)", "b"]`, $p$ = `r r1_coef["absorption (china vs. overall)", "p"]`).
+
+Note also that there are overall differences in the baserates for reporting spiritual events: Participants in Ghana and Vanuatu generally reported more than average (Ghana: $b$ = `r r1_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (ghana vs. overall)", "p"]`; Vanuatu: $b$ = `r r1_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (vanuatu vs. overall)", "p"]`), while participants in Thailand and China generally reported fewer than average (Thailand: $b$ = `r r1_coef["baserate (thailand vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (thailand vs. overall)", "p"]`; China: $b$ = `r r1_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r1_coef["baserate (china vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+ggplot(d_wide_subscale %>%
+         filter(!is.na(`absorption (tellegen)`), !is.na(`spiritual events`)) %>%
+         mutate(ctry = factor(ctry, 
+                              levels = c("us", "ghana", "thailand", 
+                                         "china", "vanuatu")),
+                `absorption (tellegen)_cent` = scale(`absorption (tellegen)`, scale = F)),
+       aes(x = `absorption (tellegen)`, # x = `absorption (tellegen)_cent`, 
+           y = `spiritual events`, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r1), aes(x = `absorption (tellegen)_cent`, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  xlim(0, 34) +
+  ylim(0, 88) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "relationship between absorption & spiritual events, by site",
+       color = "site",
+       x = "absorption (tellegen)",
+       y = "spiritual events \n(luhrmann)")
+```
+
+## ...as indexed by the "Daily spiritual experiences" scale (Underwood & Teresi)
+
+Let's look at the same thing, except using Underwood & Teresi's DSE scale. Again, Tanya's strong prediction would be that higher absorption (as captured by the Tellegen scale) would be correlated with more spiritual events (as indxed by the Underwood & Teresi scale).
+
+Here's a test for the overall correlation:
+
+```{r}
+d_wide_subscale_collapsedse <- d_wide_subscale %>%
+  mutate(dse_total = `daily spiritual experiences (#1-14)` + `daily spiritual experiences (#15-16)`)
+
+cor2 <- with(d_wide_subscale_collapsedse, cor.test(`absorption (tellegen)`, dse_total)); cor2
+```
+
+Again, looks like this prediction is born out by the data! Absorption was significantly positively correlated - albeit more weakly than above - with reported spiritual events ($r$ = `r round2(cor2$estimate)`, $p$ = `r ifelse(cor2$p.value < 0.001, "<0.001", format(round(cor2$p.value, 3), digits = 3))`), accounting for approximately `r round(cor2$estimate^2 * 100)`% of the variance in reported spirtual events.
+
+Now let's take a look at what's going on in each site with a regression analysis:
+
+```{r, results = "asis"}
+# effect-code site
+contrasts(d_wide_subscale_collapsedse$ctry) <- 
+  cbind(ghana = c(-1, 1, 0, 0, 0),
+        thailand = c(-1, 0, 1, 0, 0),
+        china = c(-1, 0, 0, 1, 0),
+        vanuatu = c(-1, 0, 0, 0, 1))
+
+r2 <- lm(dse_total ~ `absorption (tellegen)_cent` * ctry, 
+         d_wide_subscale_collapsedse %>% 
+           mutate(`absorption (tellegen)_cent` = scale(`absorption (tellegen)`, scale = F)))
+
+r2_coef <- summary(r2)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("param") %>%
+  rename(b = Estimate, se = Std..Error, t = t.value, p = Pr...t..) %>%
+  mutate_at(vars(b, se, t), funs(round2)) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001",
+                    format(round(p, 3), digits = 3)),
+         param = factor(param,
+                        levels = c("(Intercept)", 
+                                   "ctryghana", 
+                                   "ctrythailand",
+                                   "ctrychina", 
+                                   "ctryvanuatu", 
+                                   "`absorption (tellegen)_cent`",
+                                   "`absorption (tellegen)_cent`:ctryghana", 
+                                   "`absorption (tellegen)_cent`:ctrythailand", 
+                                   "`absorption (tellegen)_cent`:ctrychina", 
+                                   "`absorption (tellegen)_cent`:ctryvanuatu"),
+                        labels = c("baserate (overall)", 
+                                   "baserate (ghana vs. overall)",
+                                   "baserate (thailand vs. overall)",
+                                   "baserate (china vs. overall)",
+                                   "baserate (vanuatu vs. overall)",
+                                   "absorption (overall)",
+                                   "absorption (ghana vs. overall)",
+                                   "absorption (thailand vs. overall)",
+                                   "absorption (china vs. overall)",
+                                   "absorption (vanuatu vs. overall)"))) %>%
+  arrange(param) %>%
+  column_to_rownames("param")
+
+knitr::kable(r2_coef)
+```
+
+These results indicate that, as predicted, there was a significant positive relationship between absorption and reported spiritual events, collapsing across sites ($b$ = `r r2_coef["absorption (overall)", "b"]`, $p$ = `r r2_coef["absorption (overall)", "p"]`). Here, in contrast to above, the relationship between absorption and spiritual events seemed particularly strong among participants in Thailand ($b$ = `r r2_coef["absorption (thailand vs. overall)", "b"]`, $p$ = `r r2_coef["absorption (thailand vs. overall)", "p"]`).
+
+Note also that there are overall differences in the baserates for reporting spiritual events: Participants in Ghana and Vanuatu generally reported more than average (Ghana: $b$ = `r r2_coef["baserate (ghana vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (ghana vs. overall)", "p"]`; Vanuatu: $b$ = `r r2_coef["baserate (vanuatu vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (vanuatu vs. overall)", "p"]`), while participants in Thailand and China generally reported fewer than average (Thailand: $b$ = `r r2_coef["baserate (thailand vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (thailand vs. overall)", "p"]`; China: $b$ = `r r2_coef["baserate (china vs. overall)", "b"]`, $p$ = `r r2_coef["baserate (china vs. overall)", "p"]`).
+
+Here's a visualization of these relationships:
+
+```{r, fig.width = 4, fig.asp = 0.375}
+ggplot(d_wide_subscale_collapsedse %>%
+         filter(!is.na(`absorption (tellegen)`), !is.na(dse_total)) %>%
+         mutate(ctry = factor(ctry, 
+                              levels = c("us", "ghana", "thailand", 
+                                         "china", "vanuatu")),
+                `absorption (tellegen)_cent` = scale(`absorption (tellegen)`, scale = F)),
+       aes(x = `absorption (tellegen)`, # x = `absorption (tellegen)_cent`, 
+           y = dse_total, color = ctry)) +
+  facet_grid(~ ctry) +
+  geom_point(size = 1, alpha = 0.5) +
+  geom_smooth(method = "lm", color = "black") +
+  # geom_line(data = fortify(r2), aes(x = `absorption (tellegen)_cent`, y = .fitted), color = "black") +
+  scale_color_brewer(palette = "Dark2") +
+  xlim(0, 34) +
+  ylim(0, 88) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(title = "relationship between absorption & spiritual events, by site",
+       color = "site",
+       x = "absorption (tellegen)",
+       y = "daily spiritual experiences\n(underwood & teresi)")
+```

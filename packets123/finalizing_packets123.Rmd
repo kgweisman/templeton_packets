@@ -8,7 +8,7 @@ output:
   pdf_document: default
 ---
 
-This is a document describing how we create the final dataset.
+This is a document describing how we create the final dataset. Last updated 2018-04-05.
 
 # Setup
 
@@ -111,12 +111,37 @@ d_tidy5 <- d_tidy4 %>%
 glimpse(d_tidy5)
 ```
 
+# Dealing with extra Thai questions on DSE
+
+There were four on the DSE scale (`dse_07`, `dse_08`, `dse_15`, and `dse_16`), where Thai participants answered a bunch of different questions instead of just one. Let's deal with that by "crediting" Thai participants with their maximum response for any of the options for that question:
+
+```{r}
+d_dse_thai <- d_tidy5 %>%
+  left_join(d_all %>% distinct(subj, ctry)) %>%
+  filter(grepl("dse_07", question_label_universal) |
+           grepl("dse_08", question_label_universal) |
+           grepl("dse_15", question_label_universal) |
+           grepl("dse_16", question_label_universal)) %>%
+  mutate(question_label_universal = substr(question_label_universal, 1, 6)) %>%
+  group_by(subj, question_label_universal) %>%
+  top_n(1, response_coded) %>%
+  distinct()
+
+d_tidy6 <- d_tidy5 %>%
+  filter(!grepl("dse_07", question_label_universal),
+         !grepl("dse_08", question_label_universal),
+         !grepl("dse_15", question_label_universal),
+         !grepl("dse_16", question_label_universal)) %>%
+  full_join(d_dse_thai)
+```
+
+
 # Eliminating people who failed attention checks
 
 Let's see how many people failed at least one "attention check":
 
 ```{r}
-failed_attn <- d_tidy5 %>%
+failed_attn <- d_tidy6 %>%
   filter(byhand_subscale == "attn" | 
            grepl("attn", question_label_universal)) %>%
   filter(!is.na(response_coded)) %>%
@@ -125,11 +150,13 @@ failed_attn <- d_tidy5 %>%
 failed_attn
 ```
 
-Looks like there were a total of `r nrow(failed_attn)` participants who failed at least 1 attention check. Let's remove their data from our dataset (at least for now).
+Looks like there were a total of `r nrow(failed_attn)` participants who failed at least 1 attention check. This is a lot, and it differentially affects Vanuatu. Looking at the actual attention checks, I really don't think this is a great quality control (as of 2018-04-05). Let's NOT remove their data from our dataset (at least for now).
 
 ```{r}
-d_tidy6 <- d_tidy5 %>%
-  filter(!subj %in% failed_attn$subj)
+# d_tidy7 <- d_tidy6 %>%
+#   filter(!subj %in% failed_attn$subj)
+
+d_tidy7 <- d_tidy6
 ```
 
 # Wide-form data (by question)
@@ -137,7 +164,7 @@ d_tidy6 <- d_tidy5 %>%
 For some purposes, we'll want a "wide-form" dataset, where all of the data from a single participant is listed in a single ("wide") row. Let's do that here, making sure to re-add all the info we have about that participant.
 
 ```{r}
-d_wide <- d_tidy6 %>%
+d_wide <- d_tidy7 %>%
   distinct(subj, packet, version, 
            question_label_universal, response_coded) %>%
   spread(question_label_universal, response_coded) %>%
@@ -182,7 +209,9 @@ d_long_subscale <- d_long %>%
   left_join(question_key %>% 
               select(question_label_universal, byhand_subscale) %>% 
               rename(question = question_label_universal,
-                     subscale = byhand_subscale)) %>%
+                     subscale = byhand_subscale) %>%
+              filter(!grepl("thai", subscale)) %>%
+              mutate(subscale = factor(subscale))) %>%
   ungroup() %>%
   distinct() %>%
   filter(!is.na(response)) %>%
@@ -208,11 +237,10 @@ d_long_subscale %>%
                   levels = c("attn", 
                              "exwl", 
                              "exwl_extra",
-                             "dse_1to4", 
-                             "dse_5to14", 
-                             "dse_5to14_thai",
+                             "dse_01to14", 
+                             # "dse_5to14_thai",
                              "dse_15to16", 
-                             "dse_15to16_thai",
+                             # "dse_15to16_thai",
                              "spev", 
                              "sen_sensory_seeking", 
                              "sen_body_awareness", 

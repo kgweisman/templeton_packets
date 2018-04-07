@@ -1,0 +1,443 @@
+---
+title: 'Grappling with the "Dualism" scale'
+subtitle: 'Last updated 2018-04-05'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+library(psych)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data (reverse-coded)
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+
+# load data (before reverse-coding)
+d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv")
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+# Differences across fieldsites
+
+## Mean subscale scores by site
+
+First, let's take the 5 a priori subscales we posited and look at the average scores for participants in each site:
+
+```{r, include = F}
+d_long_subscale_boot <- d_long_subscale %>%
+  filter(!is.na(sum_score)) %>%
+  group_by(ctry, packet, subscale) %>%
+  do(data.frame(rbind(smean.cl.boot(.$sum_score)))) %>%
+  ungroup() %>%
+  filter(subscale != "attn") %>%
+  left_join(d_long_subscale %>%
+              filter(!is.na(sum_score)) %>%
+              count(ctry, packet, subscale)) %>%
+  mutate(packet = paste("packet", packet),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_1to4", 
+                             "dse_5to14", 
+                             "dse_5to14_thai",
+                             "dse_15to16", 
+                             "dse_15to16_thai",
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-4)",
+                             "daily spiritual experiences (#5-14)",
+                             "daily spiritual experiences (#5-14 thai)",
+                             "daily spiritual experiences (#15-16)",
+                             "daily spiritual experiences (#15-16 thai)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology")))
+```
+
+```{r, fig.width = 6, fig.asp = 0.6}
+ggplot(d_long_subscale_boot %>%
+         filter(grepl("dualism", subscale)) %>%
+         mutate(subscale = 
+                  factor(subscale,
+                         labels = 
+                           c("Dualism: Mental states\nrange: 0 to 8",
+                             "Dualism: Life events\nrange: 0 to 5",
+                             "Dualism: Inanimate consciousness\nrange: 0 to 6",
+                             "Dualism: Minds, selves, & world\nrange: 0 to 9",
+                             "Dualism: Epistemology\nrange: 0 to 5"))) %>%
+         mutate(packet = gsub("packet ", "P", packet),
+                max = case_when(
+                  grepl("mental states", tolower(subscale)) ~ 8,
+                  grepl("life events", tolower(subscale)) ~ 5,
+                  grepl("inanimate", tolower(subscale)) ~ 6,
+                  grepl("minds", tolower(subscale)) ~ 9,
+                  grepl("epistem", tolower(subscale)) ~ 5)),
+       aes(x = ctry, y = Mean, color = ctry)) +
+  facet_wrap(~ reorder(interaction(packet, subscale, sep = ": "),
+                       as.numeric(factor(packet))),
+             ncol = 5, scales = "fixed") +
+  geom_hline(aes(yintercept = 0), lty = 2, color = "black") +
+  geom_hline(aes(yintercept = max), lty = 2, color = "black") +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 9), breaks = 0:9) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Mean subscale scores by site",
+       subtitle = "A higher score indicates more 'dualist' rather than 'materialist' reponses\nMin. and max. score for each subscale are demarcated by the dotted lines\nError bars are bootstrapped 95% confidence intervals",
+       x = "Site", color = "Site",
+       y = "Mean subscale score (range varies by subscale)")
+```
+
+Some surprising things come out of this:
+
+- US participants scored higher in "dualism", on average, than other participants in nearly every subscale. This is the opposite of what we might predict.
+- GH and VT participants - who were the most likely to be devout Christians, given our samples - scored quite low in "dualism" across the board, even in the more spiritual kinds of "dualism" that were captured by the "Life events" and "Minds, selves, & world" subscales.
+
+Let's look at these differences in more detail using the "raw data" for individual questions, rather than these subscale scores. (After all, these subscales have never been validated! This is one of the very first times we've tried this scale.)
+
+## Responses by question, by site
+
+There are two ways we might want to look at the "raw data" here: after reverse-coding (which allows us to see how "dualist" vs. "materialist" participants' responses were in each site) and before reverse-coding (which allows to to see how often people circled "I agree" vs. "I do not agree"). These are 100% redundant, but for some purposes one might be more intuitive than the other.
+
+### AFTER reverse-coding
+
+First, let's look at responses the way they were intended to be looked at - i.e., **after** reverse-coding items. Here, we focus on the percentage of people who gave the more "dualist" (i.e., less "materialist") response to each question:
+
+```{r, fig.width = 8, fig.asp = 0.6}
+d_long %>%
+  filter(grepl("minw_", question),
+         # ctry %in% c("ghana", "us"),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response, 
+                           levels = c(0, 1),
+                           labels = c("'Materialist'", "'Dualist'")),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = paste0(substr(question_text, 
+                                             start = 1, stop = 1000), 
+                                      # "...",
+                                      coding),
+         subscale = factor(subscale,
+                           labels = c("Epistemology",
+                                      "Inanimate beings",
+                                      "Life events",
+                                      "Mental states",
+                                      "Minds, selves, & world"))) %>%
+  count(ctry, subscale, question_text_short, response) %>%
+  spread(response, n) %>%
+  arrange(subscale, ctry, desc(`'Dualist'`)) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         total_n = `'Materialist'` + `'Dualist'`) %>%
+  gather(response, n, c(`'Materialist'`, `'Dualist'`)) %>%
+  mutate(response = factor(response,
+                           levels = c("'Materialist'", "'Dualist'")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  ggplot(aes(x = reorder(question_text_short, desc(order)), 
+             y = n, fill = response)) +
+  facet_grid(subscale ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity") +
+  geom_text(aes(label = paste0(round(n/total_n, 2)*100, "%"), 
+                alpha = response), size = 3) +
+  scale_alpha_discrete(guide = "none", range = c(0, 1)) +
+  theme_bw() +
+  labs(title = "Responses to 'Dualism' scale items",
+       subtitle = "% corresponds to those giving the more 'dualist' response, after reverse coding",
+       x = "", y = "Count of responses", fill = "Type of response") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+```
+
+
+## BEFORE reverse-coding
+
+Now, let's look at responses the way the participants saw them - i.e., **before** reverse-coding items. Here, we focus on the percentage of people who circled "I agree" for each question:
+
+```{r, fig.width = 8, fig.asp = 0.6}
+d_all %>%
+  select(subj, ctry, starts_with("minw_")) %>%
+  gather(question, response, starts_with("minw_")) %>%
+  filter(grepl("minw_", question),
+         # ctry %in% c("ghana", "us"),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(# response = factor(response, 
+                           # levels = c(0, 1),
+                           # labels = c("'Materialist'", "'Dualist'")),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = paste0(substr(question_text, 
+                                             start = 1, stop = 1000), 
+                                      # "...",
+                                      coding),
+         subscale = factor(subscale,
+                           labels = c("Epistemology",
+                                      "Inanimate beings",
+                                      "Life events",
+                                      "Mental states",
+                                      "Minds, selves, & world"))) %>%
+  filter(!is.na(subscale)) %>%
+  count(ctry, subscale, coding, question_text_short, response) %>%
+  spread(response, n) %>%
+  arrange(subscale, ctry, desc(`i agree`)) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         total_n = `i do not agree` + `i agree`) %>%
+  gather(response, n, c(`i do not agree`, `i agree`)) %>%
+  mutate(response = factor(response,
+                           levels = c("i do not agree", "i agree")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu")),
+         coding = factor(coding,
+                         levels = c("", "(REVERSED)"),
+                         labels = c("normal", "reversed"))) %>%
+  filter(!is.na(subscale)) %>%
+  distinct() %>%
+  ggplot(aes(x = reorder(question_text_short, desc(order)), 
+             y = n, fill = coding, alpha = response)) +
+  facet_grid(subscale ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity") +
+  geom_text(aes(label = paste0(round(n/total_n, 2)*100, "%"), 
+                alpha = response), size = 3) +
+  scale_alpha_discrete(guide = "none", range = c(0, 1)) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_bw() +
+  labs(title = "Responses to 'Dualism' scale items",
+       subtitle = "% corresponds to those who say 'I agree,' BEFORE reverse-coding",
+       x = "", y = "Count of responses", fill = "Type of question") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+```
+
+Either way we look at it, a few weird things jump out. Just to highlight a few that John and I noticed:
+
+- Only 75% of GH participants circled "I agree" to the item "I believe in something like a soul or a spirit" (in the "Minds, selves, & world" subscale). This is lower than the US!
+- 56% of GH participants circled "I agree" to the item "Even though some people believe in souls or spirits, there is really no such thing" (also in the "Minds, selves, & world" subscale). This seems really off, and it's very inconsistent with the "I believe in something like a soul or a spirit" item, above.
+- 55% of GH participants and 43% of VT participants cirlced "I agree" to the item "There is no such thing as an afterlife" (in the "Live events" subscale). This is lower than I'd predict among devout Christians.
+
+Many of these questions seem to have been particularly problematic in Ghana, though it could be useful to get other perspectives on the responses from each site.
+
+# Scale structure
+
+Another kind of question you could ask is how the different questions were correlated with each other, both overall and within each site.
+
+## Overall
+
+```{r, fig.width = 5, fig.asp = 1}
+overall <- d_long %>%
+  filter(grepl("minw_", question), !grepl("attn", question), 
+         !is.na(response)) %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+
+overall_clust <- hclust(dist(t(overall)))
+ggdendrogram(overall_clust, rotate = TRUE)
+```
+
+## By site
+
+### US alone
+
+```{r, fig.width = 5, fig.asp = 1}
+us <- d_long %>%
+  filter(grepl("minw_", question), !grepl("attn", question), 
+         !is.na(response), ctry == "us") %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+
+us_clust <- hclust(dist(t(us)))
+ggdendrogram(us_clust, rotate = TRUE)
+```
+
+### Ghana alone
+
+```{r, fig.width = 5, fig.asp = 1}
+ghana <- d_long %>%
+  filter(grepl("minw_", question), !grepl("attn", question), 
+         !is.na(response), ctry == "ghana") %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+
+ghana_clust <- hclust(dist(t(ghana)))
+ggdendrogram(ghana_clust, rotate = TRUE)
+```
+
+
+
+
+### Thailand alone
+
+```{r, fig.width = 5, fig.asp = 1}
+thailand <- d_long %>%
+  filter(grepl("minw_", question), !grepl("attn", question), 
+         !is.na(response), ctry == "thailand") %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+
+thailand_clust <- hclust(dist(t(thailand)))
+ggdendrogram(thailand_clust, rotate = TRUE)
+```
+
+### Vanuatu alone
+
+```{r, fig.width = 5, fig.asp = 1}
+vanuatu <- d_long %>%
+  filter(grepl("minw_", question), !grepl("attn", question), 
+         !is.na(response), ctry == "vanuatu") %>%
+  select(subj, question, response) %>%
+  left_join(question_key %>% 
+              select(question_label_universal, 
+                     question_text, byhand_subscale) %>% 
+              rename(question = question_label_universal)) %>%
+  distinct(subj, question_text, response) %>%
+  spread(question_text, response) %>%
+  data.frame() %>%
+  remove_rownames() %>%
+  column_to_rownames("subj")
+
+vanuatu_clust <- hclust(dist(t(vanuatu)))
+ggdendrogram(vanuatu_clust, rotate = TRUE)
+```
+
+
+
