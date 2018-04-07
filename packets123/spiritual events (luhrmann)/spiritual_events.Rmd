@@ -1,0 +1,382 @@
+---
+title: 'Grappling with the "Spiritual Events" scale'
+subtitle: 'Last updated 2018-04-07'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+library(psych)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data (reverse-coded)
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+
+# load data (before reverse-coding)
+d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv")
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+Here we look at the "spiritual events" scale (Luhrmann; Packet 1) in detail.
+
+# Differences across fieldsites
+
+## Mean scores by site
+
+First, let's look at scores for participants in each site:
+
+```{r, include = F}
+d_long_subscale_boot <- d_long_subscale %>%
+  filter(!is.na(sum_score)) %>%
+  group_by(ctry, packet, subscale) %>%
+  do(data.frame(rbind(smean.cl.boot(.$sum_score)))) %>%
+  ungroup() %>%
+  filter(subscale != "attn") %>%
+  left_join(d_long_subscale %>%
+              filter(!is.na(sum_score)) %>%
+              count(ctry, packet, subscale)) %>%
+  mutate(packet = paste("packet", packet),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_1to4", 
+                             "dse_5to14", 
+                             "dse_5to14_thai",
+                             "dse_15to16", 
+                             "dse_15to16_thai",
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-4)",
+                             "daily spiritual experiences (#5-14)",
+                             "daily spiritual experiences (#5-14 thai)",
+                             "daily spiritual experiences (#15-16)",
+                             "daily spiritual experiences (#15-16 thai)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology")))
+```
+
+```{r, fig.width = 3, fig.asp = 0.9}
+ggplot(d_long_subscale_boot %>%
+         filter(subscale == "spiritual events"),
+       aes(x = ctry, y = Mean)) +
+  # geom_hline(aes(yintercept = 0), lty = 2, color = "black") +
+  # geom_hline(aes(yintercept = 36), lty = 2, color = "black") +
+  geom_point(data = d_long_subscale %>%
+               filter(subscale == "spev",
+                      !is.na(sum_score)),
+             aes(y = sum_score, color = ctry),
+             position = position_jitter(width = 0.3, height = 0),
+             alpha = 0.3, size = 1) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  # scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(-0.5, 88.5), breaks = seq(0, 100, 10)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Mean spiritual events scores by site (Luhrmann)",
+       subtitle = "A higher score indicates more endorsements of 'spiritual events' (range: 0-88)\nError bars are bootstrapped 95% confidence intervals",
+       x = "Site", color = "Site",
+       y = "Mean score")
+```
+
+Note that this plot includes both average scores for each site (in black), and individual scores for all of the participants in that site (small, colorful points in the background, which are "jittered" around a little so that you can see them all).
+
+Looks like people in different sites responded quite differently to this scale! Participants in Ghana and Vanuatu responded much more positively; participants in the US, and Thailand look about the same to me, and participants in China slightly lower. 
+
+Now let's look at these differences in more detail using the "raw data" for individual questions, rather than these subscale scores.
+
+## Responses by question, by site
+
+```{r, fig.width = 10, fig.asp = 0.7}
+d_plot <- d_long %>%
+  filter(grepl("spev", question), !grepl("attn", question)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,60})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(question,
+                                           ": ",
+                                           substr(question_text,
+                                                  start = 1, stop = 10000),
+                                           # "...",
+                                           coding))) %>%
+  count(ctry, question_text_short, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(`0`:`4`), 
+            funs(replace(., is.na(.), 0))) %>%
+  arrange(ctry, `0`) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         nonzero_n = `1` + `2` + `3` + `4`,
+         total_n = `0` + `1` + `2` + `3` + `4`) %>%
+  gather(response, n, c(`0`, `1`, `2`, `3`, `4`)) %>%
+  mutate(response = factor(response,
+                           levels = c("0", "1", "2", "3", "4")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct()
+
+adjust <- 10
+
+ggplot(d_plot %>%
+         mutate(response = factor(response,
+                                  labels = c("Never", "Once", "Several times",
+                                             "Fairly often", "Very often"))),
+       aes(x = reorder(question_text_short, desc(question_text_short)),
+           # x = reorder(question_text_short, desc(order)),
+           y = n, fill = response)) +
+  facet_grid(. ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity", 
+           color = "black", size = 0.2) +
+  geom_text(data = d_plot %>% 
+              distinct(ctry, question_text_short, order, 
+                       nonzero_n, total_n),
+            aes(y = max(d_plot$total_n) + adjust, fill = NULL,
+                label = paste0(round(nonzero_n/total_n, 2)*100, "%")), 
+            size = 3, hjust = 1) +
+  scale_y_continuous(limits = c(0, max(d_plot$total_n) + adjust)) +
+  scale_fill_brewer(palette = "PuBuGn") +
+  theme_bw() +
+  labs(title = "Responses to 'Spiritual events' (Luhrmann) scale items",
+       subtitle = "% corresponds to *non-zero* response",
+       x = "", y = "Count of responses", fill = "Response") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+
+rm(adjust)
+```
+
+VERY eager to hear others' observations... lots to chew on here. Off the top of my head, a few things stand out:
+
+- Tons of positive responses in GH and VT - but not to every single item. Whether there are genuine site differences and/or different response tendencies in these two sites, there is also variability across questions, which gives me some hope that most people were reading and thinking about each question. But it still doesn't rule out a general "response bias/strategy," e.g., generally try to be "agreeable"/"positive", or generally circle things on the right. (For this "frequency" response scale, the "agreeable" interpretation is a little less straightforward than for "I agree" kinds of scales, but it's still possible).
+- Virtually everybody in GH and VT said that God or a spirit had placed a thought inside their head at least once; about half of participants in the US agreed; but relatively few participants in TH or CH agreed.
+- People may have used the response scale differently in different places (attention **Emily**, who raised this question!): e.g., although people everywhere used the "Never" extreme response, people in CH almost never used the "Very often" extreme response. People in TH and the US were sparing with their use of "Very often"; people in GH and VT somewhat less so (though it was still a relatively rare response for most items).
+
+This is just the tip of the iceberg. Tons to think through here.
+
+# Distribution of responses for individual participants, by site
+
+Another thing we might be interested in is how individual participants responded: Were there people who said yes to everything, or no to everything? How do these distributions of responses differ across participants in different sites?
+
+Let's take a look:
+
+```{r, fig.width = 6, fig.asp = 1}
+d_long %>%
+  filter(grepl("spev_", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           labels = c("Spiritual events (Luhrmann)"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(c(`0`, `1`, `2`, `3`, `4`)), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = `0` + `1` + `2` + `3` + `4`,
+         prop_0 = `0`/total_n,
+         prop_1 = `1`/total_n,
+         prop_2 = `2`/total_n,
+         prop_3 = `3`/total_n,
+         prop_4 = `4`/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  select(-c(`0`, `1`, `2`, `3`, `4`)) %>%
+  gather(response, prop, starts_with("prop")) %>%
+  mutate(response = factor(response,
+                           labels = c("Never", "Once", "Several times",
+                                      "Fairly often", "Very often"))) %>%
+  ggplot(aes(x = prop, fill = ctry)) +
+  facet_grid(response ~ ctry, scales = "free", space = "free") +
+  geom_histogram(binwidth = 1/18) +
+  scale_x_continuous(breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(breaks = seq(0, 100, 10)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many times participants endorsed each response option for the 'Spiritual events' (Luhrmann) scale items",
+       x = "Proportion of responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+Again, lots to chew on here, including:
+
+- The vast majority of participants in the US, TH, and CH *never* used the most extreme response option, "Very often". This was also true for a sizable minority of participants in GH and VT, but most people used it once or more.
+- This general pattern is also true (though less extreme) for "Fairly often."
+- Quite a few people in the US and CH (and a sizable handful in TH) said "Never" for every (or almost every) question.
+
+Again, lots to sort through here.
+
+Just for fun, here's another way to look at the same data, overlaying the density distributions for each site on top of each other to see where they seem to be similar/different:
+
+```{r, fig.width = 3, fig.asp = 3}
+d_long %>%
+  filter(grepl("spev", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           levels = c("spev"),
+                           labels = c("Spiritual events (Luhrmann)"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(c(`0`, `1`, `2`, `3`, `4`)), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = `0` + `1` + `2` + `3` + `4`,
+         prop_0 = `0`/total_n,
+         prop_1 = `1`/total_n,
+         prop_2 = `2`/total_n,
+         prop_3 = `3`/total_n,
+         prop_4 = `4`/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  select(-c(`0`, `1`, `2`, `3`, `4`)) %>%
+  gather(response, prop, starts_with("prop")) %>%
+  mutate(response = factor(response,
+                           labels = c("Never", "Once", "Several times",
+                                      "Fairly often", "Very often"))) %>%
+  ggplot(aes(x = prop, fill = ctry)) +
+  facet_grid(response ~ ., scales = "free", space = "fixed") +
+  geom_density(alpha = 0.3) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many times participants endorsed each\nresponse option for the 'Spiritual events' (Luhrmann) scale items",
+       x = "Proportion of responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+Looking pretty darn similar here, with the exception of the VT distribution being shifted slightly higher overall.
