@@ -132,7 +132,13 @@ d_tidy6 <- d_tidy5 %>%
          !grepl("dse_08", question_label_universal),
          !grepl("dse_15", question_label_universal),
          !grepl("dse_16", question_label_universal)) %>%
-  full_join(d_dse_thai)
+  full_join(d_dse_thai) %>%
+  mutate(question_text = factor(ifelse(question_label_universal %in%
+                                         c("dse_07", "dse_08", 
+                                           "dse_15", "dse_16"),
+                                       gsub("god", "god*", 
+                                            as.character(question_text)),
+                                       as.character(question_text))))
 ```
 
 
