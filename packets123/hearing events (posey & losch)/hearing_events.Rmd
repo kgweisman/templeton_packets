@@ -276,7 +276,7 @@ d_long %>%
   ggplot(aes(x = prop_yes, fill = ctry)) +
   facet_grid(subscale ~ ctry, scales = "free", space = "free") +
   geom_histogram(binwidth = 1/18) +
-  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_x_continuous(breaks = seq(0, 1, 0.25)) +
   scale_fill_brewer(palette = "Dark2") +
   theme_bw() +
   labs(title = "Distributions of how many 'yes' responses participants gave to 'Hearing events' (Posey & Losch) scale items",
