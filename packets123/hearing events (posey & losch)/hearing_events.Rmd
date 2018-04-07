@@ -184,10 +184,12 @@ d_long %>%
                          labels = c("(REVERSED)", "")),
          question_text_short = gsub('(.{1,130})(\\s|$)',
                                     '\\1\n',
-                                    paste0(substr(question_text,
-                                                     start = 1, stop = 10000),
-                                              # "...",
-                                              coding)),
+                                    paste0(question,
+                                           ": ",
+                                           substr(question_text,
+                                                  start = 1, stop = 10000),
+                                           # "...",
+                                           coding)),
          subscale = factor(subscale, labels = c("Hearing events"))) %>%
   count(ctry, subscale, question_text_short, response) %>%
   spread(response, n) %>%
@@ -204,7 +206,7 @@ d_long %>%
                        labels = c("US", "Ghana", "Thailand", 
                                   "China", "Vanuatu"))) %>%
   distinct() %>%
-  ggplot(aes(x = reorder(question_text_short, desc(order)), 
+  ggplot(aes(x = question_text_short, # reorder(question_text_short, desc(order)), 
              y = n, fill = response)) +
   facet_grid(subscale ~ ctry, scales = "free", space = "free") +
   geom_bar(position = position_stack(), stat = "identity") +
