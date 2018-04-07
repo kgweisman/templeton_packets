@@ -47,32 +47,35 @@ This is an overview of the means and first-order relationships among scales incl
 
 These packets included `r length(levels(factor(d_long_subscale$subscale))) - 1` scales or subscales, including the following:
 
-- **Absorption** (Tellegen); range: 0 to 34
-- **Absorption extra** (a handful of extra questions extra questions); range: 0 to 4
-- **Daily spiritual experiences #1-14** (Underwood & Teresi); range: 0 to 70
-- **Daily spiritual experiences #15-16** (Underwood & Teresi); range: 0 to 10
-- **Spiritual events** (Luhrmann); range: 0 to 88
-- **Sensory seeking** (Brown et al.); range: -28 to 28
-- **Body awareness** (Shields et al.); range: -36 to 36
-- **Attention to feelings** (Salovey et al.); range: -42 to 42
-- **Hallucination** (Alderson-Day); range: 0 to 27
-- **VISQ: dialogic speech** (McCarthy-Jones & Fernyhough); range: -8 to 8
-- **VISQ: inner speech** (McCarthy-Jones & Fernyhough); range: -10 to 10
-- **VISQ: evaluative/motivational speech** (McCarthy-Jones & Fernyhough); range: -8 to 8
-- **Inner speech** (Hardy/Bentall); range: -20 to 20
-- **Hearing events** (Posey & Losch); range: 0 to 18
-- **Encoding style** (Lewicki); range: 0 to 40
-- **Mind metaphors** (Van Elk); range: -16 to 16
-- **Metacognition: lack of cognitive confidence** (Wells et al.); range: -12 to 12
-- **Metacognition: positive beliefs re: worrying** (Wells et al.); range: -12 to 12
-- **Metacognition: cognitive self-consciousness** (Wells et al.); range: -12 to 12
-- **Metacognition: uncontrollability/danger** (Wells et al.); range: -12 to 12
-- **Metacognition: need to control thoughts** (Wells et al.); range: -12 to 12
-- **Dualism: mental states** (Weisman); range: 0 to 8
-- **Dualism: life events** (Weisman); range: 0 to 5
-- **Dualism: inanimate consciousness** (Weisman); range: 0 to 6
-- **Dualism: minds, selves, & world** (Weisman); range: 0 to 9
-- **Dualism: epistemology** (Weisman); range: 0 to 5
+- Packet 1:
+    - **Absorption** (Tellegen); range: 0 to 34
+    - **Absorption extra** (a handful of extra questions extra questions); range: 0 to 4
+    - **Daily spiritual experiences #1-14** (Underwood & Teresi); range: 0 to 70
+    - **Daily spiritual experiences #15-16** (Underwood & Teresi); range: 0 to 10
+    - **Spiritual events** (Luhrmann); range: 0 to 88
+- Packet 2:
+    - **Sensory seeking** (Brown et al.); range: -28 to 28
+    - **Body awareness** (Shields et al.); range: -36 to 36
+    - **Attention to feelings** (Salovey et al.); range: -42 to 42
+    - **Hallucination** (Alderson-Day); range: 0 to 27
+    - **VISQ: dialogic speech** (McCarthy-Jones & Fernyhough); range: -8 to 8
+    - **VISQ: inner speech** (McCarthy-Jones & Fernyhough); range: -10 to 10
+    - **VISQ: evaluative/motivational speech** (McCarthy-Jones & Fernyhough); range: -8 to 8
+    - **Inner speech** (Hardy/Bentall); range: -20 to 20
+- Packet 3:
+    - **Hearing events** (Posey & Losch); range: 0 to 18
+    - **Encoding style** (Lewicki); range: 0 to 40
+    - **Mind metaphors** (Van Elk); range: -16 to 16
+    - **Metacognition: lack of cognitive confidence** (Wells et al.); range: -12 to 12
+    - **Metacognition: positive beliefs re: worrying** (Wells et al.); range: -12 to 12
+    - **Metacognition: cognitive self-consciousness** (Wells et al.); range: -12 to 12
+    - **Metacognition: uncontrollability/danger** (Wells et al.); range: -12 to 12
+    - **Metacognition: need to control thoughts** (Wells et al.); range: -12 to 12
+    - **Dualism: mental states** (Weisman); range: 0 to 8
+    - **Dualism: life events** (Weisman); range: 0 to 5
+    - **Dualism: inanimate consciousness** (Weisman); range: 0 to 6
+    - **Dualism: minds, selves, & world** (Weisman); range: 0 to 9
+    - **Dualism: epistemology** (Weisman); range: 0 to 5
 
 # Means by site
 

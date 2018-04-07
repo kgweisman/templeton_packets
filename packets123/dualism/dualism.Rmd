@@ -1,6 +1,6 @@
 ---
 title: 'Grappling with the "Dualism" scale'
-subtitle: 'Last updated 2018-04-05'
+subtitle: 'Last updated 2018-04-06'
 output:
   html_notebook: default
   html_document:
@@ -39,6 +39,8 @@ d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templ
 # make custom functions
 round2 <- function(x) {format(round(x, 2), digits = 2)}
 ```
+
+Here we look at the "dualism" scale (Weisman; Packet 3) in detail.
 
 # Differences across fieldsites
 
