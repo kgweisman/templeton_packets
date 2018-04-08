@@ -252,8 +252,8 @@ These are the same data, visualized in a different way. Take this with a grain o
 
 We could (and should) also look at responses to particular items. Let's do it:
 
-```{r, fig.width = 10, fig.asp = 0.6}
-d_sense_plot <- d_sense %>%
+```{r, fig.width = 10, fig.asp = 1}
+d_plot <- d_sense %>%
   left_join(question_key %>%
               distinct(question_label_universal, 
                        question_text,
@@ -266,13 +266,15 @@ d_sense_plot <- d_sense %>%
   mutate(coding = factor(coding,
                          levels = c("-1", "1"),
                          labels = c("(REVERSED)", "")),
-         question_text_short = paste0(question,
-                                      ": ",
-                                      substr(question_text, 
-                                             start = 1, stop = 1000), 
-                                      # "...",
-                                      coding),
-                  sense = factor(sense,
+         question_text_short = gsub('(.{1,60})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(question,
+                                           ": ",
+                                           substr(question_text,
+                                                  start = 1, stop = 10000),
+                                           # "...",
+                                           coding)),
+         sense = factor(sense,
                                  labels = c("Seeing", "Hearing", "Feeling",
                                             "Smelling", "Tasting",
                                             "Tangible presence", "Dreaming",
@@ -282,7 +284,7 @@ d_sense_plot <- d_sense %>%
   spread(response, n) %>%
   mutate_at(vars(`0`:`5`), 
             funs(replace(., is.na(.), 0))) %>%
-  arrange(sense, ctry, `0`) %>%
+  arrange(ctry, `0`) %>%
   rownames_to_column("order") %>%
   mutate(order = as.numeric(order),
          nonzero_n = `1` + `2` + `3` + `4` + `5`,
@@ -297,31 +299,63 @@ d_sense_plot <- d_sense %>%
                                   "China", "Vanuatu"))) %>%
   distinct()
 
-adjust <- 25
+adjust <- 15
+custom_palette <- c("#edf8fb", "#bfd3e6", "#9ebcda", "#8c96c6", "#8856a7", "#810f7c",
+                    "#f6eff7", "#bdc9e1", "#67a9cf", "#1c9099", "#016c59", "white",
+                    "#fee8c8", "#e34a33")
 
-ggplot(d_sense_plot,
-       aes(x = reorder(question_text_short, desc(order)), 
-             y = n, fill = response)) +
-  facet_grid(sense ~ ctry, scales = "free", space = "free") +
+ggplot(d_plot %>%
+         mutate(response_text = factor(case_when(
+           grepl("dse_", question_text_short) & 
+             !grepl("dse_15", question_text_short) & 
+             !grepl("dse_16", question_text_short) ~ case_when(
+             response == "0" ~ "Never",
+             response == "1" ~ "Once in a while",
+             response == "2" ~ "Some days",
+             response == "3" ~ "Most days",
+             response == "4" ~ "Every day",
+             response == "5" ~ "Many times a day"),
+           grepl("exwl_", question_text_short) ~ case_when(
+             response == "0" ~ "False",
+             response == "1" ~ "True"),
+           grepl("spev_", question_text_short) ~ case_when(
+             response == "0" ~ "Never ",
+             response == "1" ~ "Once",
+             response == "2" ~ "Several times",
+             response == "3" ~ "Fairly often",
+             response == "4" ~ "Very often",
+             response == "5" ~ " ")),
+           levels = c("Never", "Once in a while", "Some days", "Most days",
+                      "Every day", "Many times a day", 
+                      "Never ", "Once", "Several times", "Fairly often", 
+                      "Very often", " ",
+                      "False", "True"))) %>%
+         filter(!is.na(response_text)),
+       aes(x = reorder(question_text_short, desc(question_text_short)),
+           # x = reorder(question_text_short, desc(order)),
+           y = n, fill = response_text)) +
+  facet_grid(sense ~ ctry, 
+             scales = "free", space = "free") +
   geom_bar(position = position_stack(), stat = "identity", 
            color = "black", size = 0.2) +
-  geom_text(data = d_sense_plot %>% 
+  geom_text(data = d_plot %>% 
               distinct(ctry, sense, question_text_short, order, 
                        nonzero_n, total_n),
-            aes(y = max(d_sense_plot$total_n) + adjust, fill = NULL,
+            aes(y = max(d_plot$total_n) + adjust, fill = NULL,
                 label = paste0(round(nonzero_n/total_n, 2)*100, "%")), 
             size = 3, hjust = 1) +
-  scale_y_continuous(limits = c(0, max(d_sense_plot$total_n) + adjust)) +
-  scale_fill_brewer(palette = "PuBuGn") +
+  scale_y_continuous(limits = c(0, max(d_plot$total_n) + adjust)) +
+  scale_fill_manual(values = custom_palette) +
   theme_bw() +
-  labs(title = "Responses to 'Senses' items",
+  labs(title = "Responses to 'Senses' items (Packet 1, ID'd by Josh Brahinsky)",
        subtitle = "% corresponds to those giving *non-zero* responses\nNote that different questions had different response scales, including 0-1, 0-4, and 0-5",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5)) +
-  guides(fill = guide_legend(nrow = 1)) +
   # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  guides(fill = guide_legend(ncol = 6, byrow = TRUE, 
+                             override.aes = list(size = 0))) +
   coord_flip()
 
 rm(adjust)
