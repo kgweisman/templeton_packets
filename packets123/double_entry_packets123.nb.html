@@ -179,6 +179,17 @@ $(document).ready(function () {
 <h1>Setup</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBsb2FkIHBhY2thZ2VzXG5saWJyYXJ5KHRpZHl2ZXJzZSlcbiMgbG9hZCBkYXRhXG5kX2FsbCA8LSByZWFkLmNzdihcIi8vVXNlcnMva3dlaXNtYW4vRG9jdW1lbnRzL1Jlc2VhcmNoIChTdGFuZm9yZCkvUHJvamVjdHMvVGVtcGxldG9uIEdyYW50L0RBVEEgV1JBTkdMSU5HL3RlbXBsZXRvbl9wYWNrZXRzL3BhY2tldHMxMjMvcGFja2V0czEyM19kYXRhLmNzdlwiKVstMV1cbnF1ZXN0aW9uX2tleSA8LSByZWFkLmNzdihcIi8vVXNlcnMva3dlaXNtYW4vRG9jdW1lbnRzL1Jlc2VhcmNoIChTdGFuZm9yZCkvUHJvamVjdHMvVGVtcGxldG9uIEdyYW50L0RBVEEgV1JBTkdMSU5HL3RlbXBsZXRvbl9wYWNrZXRzL3BhY2tldHMxMjMvcGFja2V0czEyM19xdWVzdGlvbl9rZXlfUi5jc3ZcIilbMV1cbiMgdGhlc2UgXCItMVwicyBhcmUgdG8gZ2V0IHJpZCBvZiB0aGF0IGV4dHJhIGNvbHVtbiBhdCB0aGUgYmVnaW5uaW5nXG4jIG1ha2UgY3VzdG9tIG1pbiBhbmQgbWF4IGZ1bmN0aW9uc1xubWluX2Z1biA8LSBmdW5jdGlvbih4KSBpZmVsc2UoICFhbGwoaXMubmEoeCkpLCBtaW4oeCwgbmEucm09VCksIE5BKVxubWF4X2Z1biA8LSBmdW5jdGlvbih4KSBpZmVsc2UoICFhbGwoaXMubmEoeCkpLCBtYXgoeCwgbmEucm09VCksIE5BKVxuYGBgIn0= -->
+<pre class="r"><code># load packages
+library(tidyverse)
+# load data
+d_all &lt;- read.csv(&quot;//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv&quot;)[-1]
+question_key &lt;- read.csv(&quot;//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_R.csv&quot;)[1]
+# these &quot;-1&quot;s are to get rid of that extra column at the beginning
+# make custom min and max functions
+min_fun &lt;- function(x) ifelse( !all(is.na(x)), min(x, na.rm=T), NA)
+max_fun &lt;- function(x) ifelse( !all(is.na(x)), max(x, na.rm=T), NA)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 </div>
@@ -187,6 +198,15 @@ $(document).ready(function () {
 <p>Let’s first deal with numerical data, because that’s a whole lot easier!</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBmaWd1cmUgb3V0IHdoaWNoIHZhcmlhYmxlcyBhcmUgbnVtZXJpY1xuY2F0X3ZhcnMgPC0gZF9hbGwgJT4lXG4gIHNlbGVjdF9pZihpcy5udW1lcmljKSAlPiVcbiAgbmFtZXMoKVxuIyBtYWtlIGEgc2VwYXJhdGUgZGF0YWZyYW1lIGZvciBudW1lcmljYWwgZGF0YVxuZF9udW0gPC0gZF9hbGwgJT4lXG4gIHNlbGVjdChjdHJ5LCBzdWJqLCBwYWNrZXQsIHZlcnNpb24sIGJhdGMsIGVudHIsIGRhdGUsIGMoY2F0X3ZhcnMpKVxuYGBgIn0= -->
+<pre class="r"><code># figure out which variables are numeric
+cat_vars &lt;- d_all %&gt;%
+  select_if(is.numeric) %&gt;%
+  names()
+# make a separate dataframe for numerical data
+d_num &lt;- d_all %&gt;%
+  select(ctry, subj, packet, version, batc, entr, date, c(cat_vars))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <p>There are 300 numeric variables (!) that we can check.</p>
@@ -198,6 +218,29 @@ $(document).ready(function () {
 <p>If any pair of entries fails either or both of these tests, I’ll flag it as having a problem:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZF9udW1fY2hlY2sgPC0gZF9udW0gJT4lXG4gIGdhdGhlcihxdWVzdGlvbiwgcmVzcG9uc2UsIC1jKGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSkpICU+JVxuICBncm91cF9ieShzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uKSAlPiVcbiAgc3VtbWFyaXNlKGNvdW50ID0gbigpLFxuICAgICAgICAgICAgbWluID0gbWluX2Z1bihyZXNwb25zZSksXG4gICAgICAgICAgICBtYXggPSBtYXhfZnVuKHJlc3BvbnNlKSxcbiAgICAgICAgICAgIG1lYW4gPSBtZWFuKHJlc3BvbnNlLCBuYS5ybSA9IFQpLFxuICAgICAgICAgICAgc2QgPSBzZChyZXNwb25zZSwgbmEucm0gPSBUKSkgJT4lXG4gIG11dGF0ZShtaW5fbWF4X21lYW5fbWlzbWF0Y2ggPSBpZmVsc2UobWluID09IG1heCAmIG1pbiA9PSBtZWFuLCBGQUxTRSwgVFJVRSksXG4gICAgICAgICBzZF9ub256ZXJvID0gaWZlbHNlKHNkICVpbiUgYygwLCBOQSksIEZBTFNFLCBUUlVFKSxcbiAgICAgICAgIHByb2JzID0gbWluX21heF9tZWFuX21pc21hdGNoIHwgc2Rfbm9uemVybylcbiMgbG9vayBhdCBmdWxsIGNoZWNrICh1bmNvbW1lbnQgdG8gbG9vaylcbiMgZF9udW1fY2hlY2tcbiMgY291bnQgdXAgcHJvYmxlbXMgYW5kIGNhbGN1bGF0ZSBlcnJvciByYXRlXG5lcnJvcl9yYXRlc19udW0gPC0gZF9udW1fY2hlY2sgJT4lXG4gIHVuZ3JvdXAoKSAlPiVcbiAgY291bnQocHJvYnMpICU+JVxuICBmaWx0ZXIoIWlzLm5hKHByb2JzKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi9zdW0obiksIDUpKSAlPiVcbiAgZGF0YS5mcmFtZSgpXG5lcnJvcl9yYXRlc19udW1cbmBgYCJ9 -->
+<pre class="r"><code>d_num_check &lt;- d_num %&gt;%
+  gather(question, response, -c(ctry, subj, packet, version, batc, entr, date)) %&gt;%
+  group_by(subj, packet, version, question) %&gt;%
+  summarise(count = n(),
+            min = min_fun(response),
+            max = max_fun(response),
+            mean = mean(response, na.rm = T),
+            sd = sd(response, na.rm = T)) %&gt;%
+  mutate(min_max_mean_mismatch = ifelse(min == max &amp; min == mean, FALSE, TRUE),
+         sd_nonzero = ifelse(sd %in% c(0, NA), FALSE, TRUE),
+         probs = min_max_mean_mismatch | sd_nonzero)
+# look at full check (uncomment to look)
+# d_num_check
+# count up problems and calculate error rate
+error_rates_num &lt;- d_num_check %&gt;%
+  ungroup() %&gt;%
+  count(probs) %&gt;%
+  filter(!is.na(probs)) %&gt;%
+  mutate(proportion = round(n/sum(n), 5)) %&gt;%
+  data.frame()
+error_rates_num</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbImRhdGEuZnJhbWUiXSwibmNvbCI6MywibnJvdyI6Mn0sInJkZiI6Ikg0c0lBQUFBQUFBQUExMVFzVzdDTUJBOU93a0lTMG1SK0l0S1pDZ0xHd3ZkS3lhR0xpWUVpRWp0eUhGRS80UGZZdWtYTUdTdU9uYWpQU2MyVlczSnZuZlB2dmZ1dkZxdW45aWFBUUNGSUNSQUE0UWh4WU5BQ0NNVDN3R0NDUUp6MHovc0Y4RWRkemw5L3NSNHhwMllmUEgxM1g1Y3hzbmlaZjY2djdhUG5tQWsrRnRlSXhoM29wYXNsTnpVemxKWXdKQ3RwTktGRko3SVNNbFQ2b1JpMnhYcDQzKzNyT1MxYzNNazIzTE4wNTNDZXN4dVhzbFFWc1lSaTZpWk8vS0tpZktJaDBhWVRyYlQ3TkNJNDNSbS80bllmNHIvT3J2am9MZWtQMVlxc2xLRFhPd0xrYnZlUzc3SlM1c2tPSEUzY0ZxcFFtZzNDYkoxcXFYbTdoM0xaT21ZYmphNC9RSU5reUtiNVFFQUFBPT0ifQ== -->
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
@@ -211,13 +254,41 @@ $(document).ready(function () {
 <p>What are the errors that did happen? We could go look at them by looking up the subject ID (<code>subj</code>), packet (<code>packet</code>), version (<code>version</code>), and question (<code>question</code>) in the following dataframe:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSA8LSBkX251bV9jaGVjayAlPiVcbiAgZmlsdGVyKHByb2JzID09IFRSVUUpICU+JVxuICBkYXRhLmZyYW1lKCkgJT4lXG4gIHNlbGVjdChzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uKSAlPiVcbiAgbGVmdF9qb2luKGRfbnVtICU+JSBcbiAgICAgICAgICAgICAgZ2F0aGVyKHF1ZXN0aW9uLCByZXNwb25zZSwgXG4gICAgICAgICAgICAgICAgICAgICAtYyhjdHJ5LCBzdWJqLCBwYWNrZXQsIHZlcnNpb24sIGJhdGMsIGVudHIsIGRhdGUpKSkgJT4lXG4gIHVuZ3JvdXAoKSAlPiVcbiAgZGlzdGluY3QoY3RyeSwgc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBiYXRjLCBlbnRyLCBkYXRlLCBxdWVzdGlvbiwgcmVzcG9uc2UpICU+JVxuICBhcnJhbmdlKHN1YmosIHBhY2tldCwgdmVyc2lvbiwgcXVlc3Rpb24sIGJhdGMpXG5gYGAifQ== -->
+<pre class="r"><code>errors_num &lt;- d_num_check %&gt;%
+  filter(probs == TRUE) %&gt;%
+  data.frame() %&gt;%
+  select(subj, packet, version, question) %&gt;%
+  left_join(d_num %&gt;% 
+              gather(question, response, 
+                     -c(ctry, subj, packet, version, batc, entr, date))) %&gt;%
+  ungroup() %&gt;%
+  distinct(ctry, subj, packet, version, batc, entr, date, question, response) %&gt;%
+  arrange(subj, packet, version, question, batc)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwic3VialwiLCBcInBhY2tldFwiLCBcInZlcnNpb25cIiwgXCJxdWVzdGlvblwiKVxuIn0= -->
 <pre><code>Joining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;version&quot;, &quot;question&quot;)</code></pre>
 <!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBsb29rIGF0IGZ1bGwgZXJyb3JzICh1bmNvbW1lbnQgdG8gbG9vaywgb3IgbG9vayBhdCBlcnJvcnNfbnVtLmNzdilcbiMgZXJyb3JzX251bVxuYGBgIn0= -->
+<pre class="r"><code># look at full errors (uncomment to look, or look at errors_num.csv)
+# errors_num</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBnZXQgY291bnRzIHBlciBjb3VudHJ5IHRvIGdldCBwcm9wb3J0aW9ucyBsYXRlclxuYWxsX251bSA8LSBkX251bV9jaGVjayAlPiVcbiAgZGF0YS5mcmFtZSgpICU+JVxuICBzZWxlY3Qoc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBxdWVzdGlvbikgJT4lXG4gIGxlZnRfam9pbihkX251bSAlPiUgXG4gICAgICAgICAgICAgIGdhdGhlcihxdWVzdGlvbiwgcmVzcG9uc2UsIFxuICAgICAgICAgICAgICAgICAgICAgLWMoY3RyeSwgc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBiYXRjLCBlbnRyLCBkYXRlKSkpICU+JVxuICB1bmdyb3VwKCkgJT4lXG4gIGRpc3RpbmN0KGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSwgcXVlc3Rpb24sIHJlc3BvbnNlKSAlPiVcbiAgYXJyYW5nZShzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uLCBiYXRjKVxuYGBgIn0= -->
+<pre class="r"><code># get counts per country to get proportions later
+all_num &lt;- d_num_check %&gt;%
+  data.frame() %&gt;%
+  select(subj, packet, version, question) %&gt;%
+  left_join(d_num %&gt;% 
+              gather(question, response, 
+                     -c(ctry, subj, packet, version, batc, entr, date))) %&gt;%
+  ungroup() %&gt;%
+  distinct(ctry, subj, packet, version, batc, entr, date, question, response) %&gt;%
+  arrange(subj, packet, version, question, batc)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwic3VialwiLCBcInBhY2tldFwiLCBcInZlcnNpb25cIiwgXCJxdWVzdGlvblwiKVxuIn0= -->
 <pre><code>Joining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;version&quot;, &quot;question&quot;)</code></pre>
 <!-- rnb-output-end -->
@@ -229,6 +300,14 @@ $(document).ready(function () {
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSAlPiVcbiAgY291bnQoY3RyeSkgJT4lXG4gIGNvbXBsZXRlKGN0cnksIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfbnVtICU+JSBjb3VudChjdHJ5KSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_num %&gt;%
+  count(ctry) %&gt;%
+  complete(ctry, fill = list(n = 0)) %&gt;%
+  full_join(all_num %&gt;% count(ctry) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcImN0cnlcIlxuIn0= -->
 <pre><code>Joining, by = &quot;ctry&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -246,6 +325,14 @@ $(document).ready(function () {
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSAlPiVcbiAgY291bnQocGFja2V0LCB2ZXJzaW9uKSAlPiVcbiAgY29tcGxldGUocGFja2V0LCB2ZXJzaW9uLCBmaWxsID0gbGlzdChuID0gMCkpICU+JVxuICBmdWxsX2pvaW4oYWxsX251bSAlPiUgY291bnQocGFja2V0LCB2ZXJzaW9uKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_num %&gt;%
+  count(packet, version) %&gt;%
+  complete(packet, version, fill = list(n = 0)) %&gt;%
+  full_join(all_num %&gt;% count(packet, version) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwicGFja2V0XCIsIFwidmVyc2lvblwiKVxuIn0= -->
 <pre><code>Joining, by = c(&quot;packet&quot;, &quot;version&quot;)</code></pre>
 <!-- rnb-output-end -->
@@ -263,6 +350,14 @@ $(document).ready(function () {
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSAlPiVcbiAgY291bnQoc3ViaikgJT4lXG4gIGNvbXBsZXRlKHN1YmosIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfbnVtICU+JSBjb3VudChzdWJqKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_num %&gt;%
+  count(subj) %&gt;%
+  complete(subj, fill = list(n = 0)) %&gt;%
+  full_join(all_num %&gt;% count(subj) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcInN1YmpcIlxuIn0= -->
 <pre><code>Joining, by = &quot;subj&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -278,6 +373,14 @@ $(document).ready(function () {
 <p>Which questions?</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSAlPiVcbiAgY291bnQocXVlc3Rpb24pICU+JVxuICBjb21wbGV0ZShxdWVzdGlvbiwgZmlsbCA9IGxpc3QobiA9IDApKSAlPiVcbiAgZnVsbF9qb2luKGFsbF9udW0gJT4lIGNvdW50KHF1ZXN0aW9uKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_num %&gt;%
+  count(question) %&gt;%
+  complete(question, fill = list(n = 0)) %&gt;%
+  full_join(all_num %&gt;% count(question) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcInF1ZXN0aW9uXCJcbiJ9 -->
 <pre><code>Joining, by = &quot;question&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -293,6 +396,14 @@ $(document).ready(function () {
 <p>Which data-enterers? <em>NOTE: Of course, one person in any given mis-match is probably correct, so these aren’t real error-rates - but the relative proportions might be useful.</em></p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX251bSAlPiVcbiAgY291bnQoZW50cikgJT4lXG4gIGNvbXBsZXRlKGVudHIsIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfbnVtICU+JSBjb3VudChlbnRyKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_num %&gt;%
+  count(entr) %&gt;%
+  complete(entr, fill = list(n = 0)) %&gt;%
+  full_join(all_num %&gt;% count(entr) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcImVudHJcIlxuIn0= -->
 <pre><code>Joining, by = &quot;entr&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -311,6 +422,22 @@ $(document).ready(function () {
 <p>Now let’s deal with categorical data. Thought this would be hard, but it’s actually not… it will be hard to reconcile, but not to detect mismatches!</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBmaWd1cmUgb3V0IHdoaWNoIHZhcmlhYmxlcyBhcmUgZmFjdG9yXG5mYWN0b3JfdmFycyA8LSBkX2FsbCAlPiVcbiAgc2VsZWN0X2lmKGlzLmZhY3RvcikgJT4lXG4gIG5hbWVzKClcbmNoYXJfdmFycyA8LSBkX2FsbCAlPiVcbiAgc2VsZWN0X2lmKGlzLmNoYXJhY3RlcikgJT4lXG4gIG5hbWVzKClcbmxvZ192YXJzIDwtIGRfYWxsICU+JVxuICBzZWxlY3RfaWYoaXMubG9naWNhbCkgJT4lXG4gIG5hbWVzKClcbmNhdF92YXJzIDwtIGMoZmFjdG9yX3ZhcnMsIGNoYXJfdmFycywgbG9nX3ZhcnMpICU+JSB1bmlxdWUoKVxuIyBtYWtlIGEgc2VwYXJhdGUgZGF0YWZyYW1lIGZvciBjYXRlZ29yaWNhbCBkYXRhXG5kX2NhdCA8LSBkX2FsbCAlPiVcbiAgc2VsZWN0KGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSwgYyhjYXRfdmFycykpXG5gYGAifQ== -->
+<pre class="r"><code># figure out which variables are factor
+factor_vars &lt;- d_all %&gt;%
+  select_if(is.factor) %&gt;%
+  names()
+char_vars &lt;- d_all %&gt;%
+  select_if(is.character) %&gt;%
+  names()
+log_vars &lt;- d_all %&gt;%
+  select_if(is.logical) %&gt;%
+  names()
+cat_vars &lt;- c(factor_vars, char_vars, log_vars) %&gt;% unique()
+# make a separate dataframe for categorical data
+d_cat &lt;- d_all %&gt;%
+  select(ctry, subj, packet, version, batc, entr, date, c(cat_vars))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <p>There are 312 factor variables (!) that we can check.</p>
@@ -321,10 +448,32 @@ $(document).ready(function () {
 <p>If any pair of entries fails either or both of these tests, I’ll flag it as having a problem:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZF9jYXRfY2hlY2sgPC0gZF9jYXQgJT4lXG4gIGdhdGhlcihxdWVzdGlvbiwgcmVzcG9uc2UsIC1jKGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSkpICU+JVxuICBncm91cF9ieShjdHJ5LCBzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uKSAlPiVcbiAgZGlzdGluY3QocmVzcG9uc2UpICU+JVxuICBjb3VudCgpICU+JVxuICB1bmdyb3VwKCkgJT4lXG4gIG11dGF0ZShwcm9icyA9IGlmZWxzZShuID4gMSwgVFJVRSwgRkFMU0UpKVxuYGBgIn0= -->
+<pre class="r"><code>d_cat_check &lt;- d_cat %&gt;%
+  gather(question, response, -c(ctry, subj, packet, version, batc, entr, date)) %&gt;%
+  group_by(ctry, subj, packet, version, question) %&gt;%
+  distinct(response) %&gt;%
+  count() %&gt;%
+  ungroup() %&gt;%
+  mutate(probs = ifelse(n &gt; 1, TRUE, FALSE))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiYXR0cmlidXRlcyBhcmUgbm90IGlkZW50aWNhbCBhY3Jvc3MgbWVhc3VyZSB2YXJpYWJsZXM7XG50aGV5IHdpbGwgYmUgZHJvcHBlZFxuIn0= -->
 <pre><code>attributes are not identical across measure variables;
 they will be dropped</code></pre>
 <!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBsb29rIGF0IGZ1bGwgY2hlY2sgKHVuY29tbWVudCB0byBsb29rKVxuIyBkX2NhdF9jaGVja1xuIyBjb3VudCB1cCBwcm9ibGVtcyBhbmQgY2FsY3VsYXRlIGVycm9yIHJhdGVcbmVycm9yX3JhdGVzX2NhdCA8LSBkX2NhdF9jaGVjayAlPiVcbiAgdW5ncm91cCgpICU+JVxuICBjb3VudChwcm9icykgJT4lXG4gIHJlbmFtZShuID0gbm4pICU+JVxuICBmaWx0ZXIoIWlzLm5hKHByb2JzKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi9zdW0obiksIDUpKSAlPiVcbiAgZGF0YS5mcmFtZSgpXG5lcnJvcl9yYXRlc19jYXRcbmBgYCJ9 -->
+<pre class="r"><code># look at full check (uncomment to look)
+# d_cat_check
+# count up problems and calculate error rate
+error_rates_cat &lt;- d_cat_check %&gt;%
+  ungroup() %&gt;%
+  count(probs) %&gt;%
+  rename(n = nn) %&gt;%
+  filter(!is.na(probs)) %&gt;%
+  mutate(proportion = round(n/sum(n), 5)) %&gt;%
+  data.frame()
+error_rates_cat</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbImRhdGEuZnJhbWUiXSwibmNvbCI6MywibnJvdyI6Mn0sInJkZiI6Ikg0c0lBQUFBQUFBQUF3dHlpVERpaXVCaVlHQmdZbUJtWVdSZ1lnWXlXWmlBQkNNREN3TW5pSzVnWUdBV0JqSkFNaENGRU1BSXhMeGdQcnRGRWxDVEk1RE5CK0xidjMrcjBmT2NlWU45MHZWaWlUOEJIbWdHc3VZbDVxWVdBeGtDWUVPaGdnVkYrVW5GTUN2em9Bd3VvR2hCZmxGSlpuNGVtaUdjUmZubGVqQ0RlS0d1WW9UUXFMWWw1eVFXdzJ5RENYS2xKSllrNnFVVkFmVURlZi9RdExEbkY0QnNCR3BpQXZtYkZVMHpZeEdhZ0VCcEhzZ2xLYnJKR2FWNTJicUdSdENBWW9RR0ZDL0NhWEEyTThST3B2OVFzMWloWnJHbDVxVm41cVhDSEorVG1KU2FBK1h3QWIwTTlyRmVRVkZtWGduTUswRFJZcjJTL0pKRW1EcXU1UHdjbUFqWWN3ei9BSndRcmJybUFRQUEifQ== -->
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
@@ -338,14 +487,42 @@ they will be dropped</code></pre>
 <p>What are the errors that did happen? We could go look at them by looking up the subject ID (<code>subj</code>), packet (<code>packet</code>), version (<code>version</code>), and question (<code>question</code>) in the following dataframe:</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCA8LSBkX2NhdF9jaGVjayAlPiVcbiAgZmlsdGVyKHByb2JzID09IFRSVUUpICU+JVxuICBkYXRhLmZyYW1lKCkgJT4lXG4gIHNlbGVjdChjdHJ5LCBzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uKSAlPiVcbiAgbGVmdF9qb2luKGRfY2F0ICU+JVxuICAgICAgICAgICAgICBnYXRoZXIocXVlc3Rpb24sIHJlc3BvbnNlLCBcbiAgICAgICAgICAgICAgICAgICAgIC1jKGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSkpKSAlPiVcbiAgdW5ncm91cCgpICU+JVxuICBkaXN0aW5jdChjdHJ5LCBzdWJqLCBwYWNrZXQsIHZlcnNpb24sIGJhdGMsIGVudHIsIGRhdGUsIHF1ZXN0aW9uLCByZXNwb25zZSkgJT4lXG4gIGFycmFuZ2Uoc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBxdWVzdGlvbiwgYmF0YylcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat &lt;- d_cat_check %&gt;%
+  filter(probs == TRUE) %&gt;%
+  data.frame() %&gt;%
+  select(ctry, subj, packet, version, question) %&gt;%
+  left_join(d_cat %&gt;%
+              gather(question, response, 
+                     -c(ctry, subj, packet, version, batc, entr, date))) %&gt;%
+  ungroup() %&gt;%
+  distinct(ctry, subj, packet, version, batc, entr, date, question, response) %&gt;%
+  arrange(subj, packet, version, question, batc)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiYXR0cmlidXRlcyBhcmUgbm90IGlkZW50aWNhbCBhY3Jvc3MgbWVhc3VyZSB2YXJpYWJsZXM7XG50aGV5IHdpbGwgYmUgZHJvcHBlZEpvaW5pbmcsIGJ5ID0gYyhcImN0cnlcIiwgXCJzdWJqXCIsIFwicGFja2V0XCIsIFwidmVyc2lvblwiLCBcInF1ZXN0aW9uXCIpXG4ifQ== -->
 <pre><code>attributes are not identical across measure variables;
 they will be droppedJoining, by = c(&quot;ctry&quot;, &quot;subj&quot;, &quot;packet&quot;, &quot;version&quot;, &quot;question&quot;)</code></pre>
 <!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBsb29rIGF0IGZ1bGwgZXJyb3JzICh1bmNvbW1lbnQgdG8gbG9vaywgb3IgbG9vayBhdCBlcnJvcnNfY2F0LmNzdilcbiMgZXJyb3JzX2NhdFxuYGBgIn0= -->
+<pre class="r"><code># look at full errors (uncomment to look, or look at errors_cat.csv)
+# errors_cat</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBnZXQgY291bnRzIHBlciBjb3VudHJ5IHRvIGdldCBwcm9wb3J0aW9ucyBsYXRlclxuYWxsX2NhdCA8LSBkX2NhdF9jaGVjayAlPiVcbiAgZGF0YS5mcmFtZSgpICU+JVxuICBzZWxlY3Qoc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBxdWVzdGlvbikgJT4lXG4gIGxlZnRfam9pbihkX2NhdCAlPiUgXG4gICAgICAgICAgICAgIGdhdGhlcihxdWVzdGlvbiwgcmVzcG9uc2UsIFxuICAgICAgICAgICAgICAgICAgICAgLWMoY3RyeSwgc3ViaiwgcGFja2V0LCB2ZXJzaW9uLCBiYXRjLCBlbnRyLCBkYXRlKSkpICU+JVxuICB1bmdyb3VwKCkgJT4lXG4gIGRpc3RpbmN0KGN0cnksIHN1YmosIHBhY2tldCwgdmVyc2lvbiwgYmF0YywgZW50ciwgZGF0ZSwgcXVlc3Rpb24sIHJlc3BvbnNlKSAlPiVcbiAgYXJyYW5nZShzdWJqLCBwYWNrZXQsIHZlcnNpb24sIHF1ZXN0aW9uLCBiYXRjKVxuYGBgIn0= -->
+<pre class="r"><code># get counts per country to get proportions later
+all_cat &lt;- d_cat_check %&gt;%
+  data.frame() %&gt;%
+  select(subj, packet, version, question) %&gt;%
+  left_join(d_cat %&gt;% 
+              gather(question, response, 
+                     -c(ctry, subj, packet, version, batc, entr, date))) %&gt;%
+  ungroup() %&gt;%
+  distinct(ctry, subj, packet, version, batc, entr, date, question, response) %&gt;%
+  arrange(subj, packet, version, question, batc)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiYXR0cmlidXRlcyBhcmUgbm90IGlkZW50aWNhbCBhY3Jvc3MgbWVhc3VyZSB2YXJpYWJsZXM7XG50aGV5IHdpbGwgYmUgZHJvcHBlZEpvaW5pbmcsIGJ5ID0gYyhcInN1YmpcIiwgXCJwYWNrZXRcIiwgXCJ2ZXJzaW9uXCIsIFwicXVlc3Rpb25cIilcbiJ9 -->
 <pre><code>attributes are not identical across measure variables;
 they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;version&quot;, &quot;question&quot;)</code></pre>
@@ -358,6 +535,14 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCAlPiVcbiAgY291bnQoY3RyeSkgJT4lXG4gIGNvbXBsZXRlKGN0cnksIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfY2F0ICU+JSBjb3VudChjdHJ5KSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat %&gt;%
+  count(ctry) %&gt;%
+  complete(ctry, fill = list(n = 0)) %&gt;%
+  full_join(all_cat %&gt;% count(ctry) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcImN0cnlcIlxuIn0= -->
 <pre><code>Joining, by = &quot;ctry&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -375,6 +560,14 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCAlPiVcbiAgY291bnQocGFja2V0LCB2ZXJzaW9uKSAlPiVcbiAgY29tcGxldGUocGFja2V0LCB2ZXJzaW9uLCBmaWxsID0gbGlzdChuID0gMCkpICU+JVxuICBmdWxsX2pvaW4oYWxsX2NhdCAlPiUgY291bnQocGFja2V0LCB2ZXJzaW9uKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat %&gt;%
+  count(packet, version) %&gt;%
+  complete(packet, version, fill = list(n = 0)) %&gt;%
+  full_join(all_cat %&gt;% count(packet, version) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwicGFja2V0XCIsIFwidmVyc2lvblwiKVxuIn0= -->
 <pre><code>Joining, by = c(&quot;packet&quot;, &quot;version&quot;)</code></pre>
 <!-- rnb-output-end -->
@@ -392,6 +585,14 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCAlPiVcbiAgY291bnQoc3ViaikgJT4lXG4gIGNvbXBsZXRlKHN1YmosIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfY2F0ICU+JSBjb3VudChzdWJqKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat %&gt;%
+  count(subj) %&gt;%
+  complete(subj, fill = list(n = 0)) %&gt;%
+  full_join(all_cat %&gt;% count(subj) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcInN1YmpcIlxuIn0= -->
 <pre><code>Joining, by = &quot;subj&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -407,6 +608,14 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 <p>Which questions?</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCAlPiVcbiAgY291bnQocXVlc3Rpb24pICU+JVxuICBjb21wbGV0ZShxdWVzdGlvbiwgZmlsbCA9IGxpc3QobiA9IDApKSAlPiVcbiAgZnVsbF9qb2luKGFsbF9jYXQgJT4lIGNvdW50KHF1ZXN0aW9uKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat %&gt;%
+  count(question) %&gt;%
+  complete(question, fill = list(n = 0)) %&gt;%
+  full_join(all_cat %&gt;% count(question) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcInF1ZXN0aW9uXCJcbiJ9 -->
 <pre><code>Joining, by = &quot;question&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -424,6 +633,14 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 </ul>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZXJyb3JzX2NhdCAlPiVcbiAgY291bnQoZW50cikgJT4lXG4gIGNvbXBsZXRlKGVudHIsIGZpbGwgPSBsaXN0KG4gPSAwKSkgJT4lXG4gIGZ1bGxfam9pbihhbGxfY2F0ICU+JSBjb3VudChlbnRyKSAlPiUgcmVuYW1lKHRvdGFsX24gPSBuKSkgJT4lXG4gIG11dGF0ZShwcm9wb3J0aW9uID0gcm91bmQobi90b3RhbF9uLCA1KSkgJT4lXG4gIGFycmFuZ2UoZGVzYyhwcm9wb3J0aW9uKSlcbmBgYCJ9 -->
+<pre class="r"><code>errors_cat %&gt;%
+  count(entr) %&gt;%
+  complete(entr, fill = list(n = 0)) %&gt;%
+  full_join(all_cat %&gt;% count(entr) %&gt;% rename(total_n = n)) %&gt;%
+  mutate(proportion = round(n/total_n, 5)) %&gt;%
+  arrange(desc(proportion))</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBcImVudHJcIlxuIn0= -->
 <pre><code>Joining, by = &quot;entr&quot;</code></pre>
 <!-- rnb-output-end -->
@@ -442,6 +659,10 @@ they will be droppedJoining, by = c(&quot;subj&quot;, &quot;packet&quot;, &quot;
 <p>Finally, we’ll spit out the useful error docs into .csv files.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxud3JpdGUuY3N2KGVycm9yc19udW0sIFwiLi9wYWNrZXRzMTIzX2Vycm9yc19udW0uY3N2XCIpXG53cml0ZS5jc3YoZXJyb3JzX2NhdCwgXCIuL3BhY2tldHMxMjNfZXJyb3JzX2NhdC5jc3ZcIilcbmBgYCJ9 -->
+<pre class="r"><code>write.csv(errors_num, &quot;./packets123_errors_num.csv&quot;)
+write.csv(errors_cat, &quot;./packets123_errors_cat.csv&quot;)</code></pre>
+<!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->

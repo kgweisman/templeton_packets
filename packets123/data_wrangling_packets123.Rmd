@@ -1333,7 +1333,7 @@ d_meta <- d_meta %>%
   mutate_at(vars("meta_01_num", "meta_02_num", "meta_03_num", 
                       "meta_04_num", "meta_05_num", "meta_06_num", 
                       "meta_07_num", "meta_08_num"),
-            funs(. - 3))
+            funs(. - 2))
 
 glimpse(d_meta)
 ```
@@ -1493,10 +1493,10 @@ d_sen2 <- d_sen2 %>%
     # vars_numeric = XX,
     # vars_logical = XX,
     # vars_factorYN = XX,
-    vars_agree = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05", 
-                   "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10", 
-                   "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15", 
-                   "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20", 
+    vars_agree = c("sen2_01", "sen2_02", "sen2_03", "sen2_04", "sen2_05",
+                   "sen2_06", "sen2_07", "sen2_08", "sen2_09", "sen2_10",
+                   "sen2_11", "sen2_12", "sen2_13", "sen2_14", "sen2_15",
+                   "sen2_16", "sen2_17", "sen2_18", "sen2_19", "sen2_20",
                    "sen2_21"),
     # vars_agree2 = XX,
     # vars_never = XX,
@@ -1520,6 +1520,16 @@ d_sen2 <- d_sen2 %>%
                       "sen2_19_num", "sen2_20_num", "sen2_21_num", 
                       "sen2_attn_num")
   )
+
+# center the scale 
+d_sen2 <- d_sen2 %>%
+  mutate_at(vars("sen2_01_num", "sen2_02_num", "sen2_03_num", "sen2_04_num",
+                 "sen2_05_num", "sen2_06_num", "sen2_07_num", "sen2_08_num",
+                 "sen2_09_num", "sen2_10_num", "sen2_11_num", "sen2_12_num",
+                 "sen2_13_num", "sen2_14_num", "sen2_15_num", "sen2_16_num",
+                 "sen2_17_num", "sen2_18_num", "sen2_19_num", "sen2_20_num",
+                 "sen2_21_num"),
+            funs(. - 2))
 
 glimpse(d_sen2)
 ```
