@@ -1,0 +1,363 @@
+---
+title: 'Grappling with the "Hallucination" scale'
+subtitle: 'Last updated 2018-04-07'
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r, include = FALSE}
+# set working director
+# setwd("/Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/")
+
+# load packages
+library(tidyverse)
+library(rms)
+library(ggdendro)
+library(psych)
+
+# load question key (including manual reverse-coding)
+question_key <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_question_key_byhand.csv")
+
+# load data (reverse-coded)
+d_long <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_byquestion_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+d_long_subscale <- read_csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data_bysubscale_long.csv") %>%
+  mutate(ctry = factor(ctry, 
+                       levels = c("us", "ghana", "thailand", "china", "vanuatu")))
+
+# load data (before reverse-coding)
+d_all <- read.csv("//Users/kweisman/Documents/Research (Stanford)/Projects/Templeton Grant/DATA WRANGLING/templeton_packets/packets123/packets123_data.csv")
+
+# make custom functions
+round2 <- function(x) {format(round(x, 2), digits = 2)}
+```
+
+Here we look at the "hallucination" scale (Alderson-Day; Packet 2) in detail.
+
+# Differences across fieldsites
+
+## Mean scores by site
+
+First, let's look at scores for participants in each site:
+
+```{r, include = F}
+d_long_subscale_boot <- d_long_subscale %>%
+  filter(!is.na(sum_score)) %>%
+  group_by(ctry, packet, subscale) %>%
+  do(data.frame(rbind(smean.cl.boot(.$sum_score)))) %>%
+  ungroup() %>%
+  filter(subscale != "attn") %>%
+  left_join(d_long_subscale %>%
+              filter(!is.na(sum_score)) %>%
+              count(ctry, packet, subscale)) %>%
+  mutate(packet = paste("packet", packet),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", 
+                                  "thailand", "china", "vanuatu")),
+         subscale = 
+           factor(subscale,
+                  levels = c("exwl", 
+                             "exwl_extra",
+                             "dse_01to14", 
+                             "dse_15to16", 
+                             "spev", 
+                             "sen_sensory_seeking", 
+                             "sen_body_awareness", 
+                             "sen_trait_metamood",
+                             "her2_hallucination",
+                             "invo_VISQ_dialogic_speech", 
+                             "invo_VISQ_inner_speech",
+                             "invo_VISQ_eval_motiv_inner_speech",
+                             "invo_hardy_bentall",
+                             "her_posey_losch",
+                             "enco_lewicki",
+                             "meta_van_elk",
+                             "tat_confidence",
+                             "tat_positive_beliefs",
+                             "tat_cognitive",
+                             "tat_uncontrollability",
+                             "tat_need_control",
+                             "minw_mental_states",
+                             "minw_life_events",
+                             "minw_inanimate",
+                             "minw_selves_souls_world",
+                             "minw_epistemic"),
+                  labels = c("absorption (tellegen)", 
+                             "absorption (extra)",
+                             "daily spiritual experiences (#1-14)",
+                             "daily spiritual experiences (#15-16)",
+                             "spiritual events", 
+                             "sensory seeking",
+                             "body awareness", 
+                             "attention to feelings",
+                             "hallucination", 
+                             "VISQ: dialogic speech",
+                             "VISQ: inner speech",
+                             "VISQ: evaluative",
+                             "inner speech",
+                             "hearing events",
+                             "encoding style",
+                             "mind metaphors",
+                             "metacog.: lack of cognitive confidence",
+                             "metacog.: positive beliefs re: worrying",
+                             "metacog.: cognitive self-consciousness",
+                             "metacog.: uncontrollability/danger",
+                             "metacog.: need to control thoughts",
+                             "dualism: mental states",
+                             "dualism: life events",
+                             "dualism: inanimate consciousness",
+                             "dualism: minds, selves, & world",
+                             "dualism: epistemology")))
+```
+
+```{r, fig.width = 3, fig.asp = 0.9}
+ggplot(d_long_subscale_boot %>%
+         filter(subscale == "hallucination"),
+       aes(x = ctry, y = Mean)) +
+  # geom_hline(aes(yintercept = 0), lty = 2, color = "black") +
+  # geom_hline(aes(yintercept = 36), lty = 2, color = "black") +
+  geom_point(data = d_long_subscale %>%
+               filter(subscale == "her2_hallucination",
+                      !is.na(sum_score)),
+             aes(y = sum_score, color = ctry),
+             position = position_jitter(width = 0.3, height = 0),
+             alpha = 0.3, size = 1) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
+  geom_text(aes(label = paste0("(n=", n, ")"), y = Lower), 
+            size = 2, nudge_x = 0.15, hjust = 0) +
+  # scale_x_discrete(expand = c(0, 1)) +
+  scale_y_continuous(limits = c(-0.5, 27.5), breaks = seq(-100, 100, 10)) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(title = "Mean hallucination scores by site (Alderson-Day)",
+       subtitle = "A higher score indicates more endorsements of 'hallucination'-like experiences\n(range: 0 to 27)\nError bars are bootstrapped 95% confidence intervals",
+       x = "Site", color = "Site",
+       y = "Mean score")
+```
+
+Note that this plot includes both average scores for each site (in black), and individual scores for all of the participants in that site (small, colorful points in the background, which are "jittered" around a little so that you can see them all).
+
+Looks like people in different sites responded somewhat differently to this scale! Participants in the US and Vanuatu responded somewhat more positively; participants in Thailand somewhat more neutrally/negatively. 
+
+Now let's look at these differences in more detail using the "raw data" for individual questions, rather than these subscale scores.
+
+## Responses by question, by site
+
+```{r, fig.width = 10, fig.asp = 0.4}
+d_plot <- d_long %>%
+  filter(grepl("her2_", question),
+         !grepl("attn", question)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,30})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(question,
+                                           ": ",
+                                           substr(question_text,
+                                                  start = 1, stop = 10000),
+                                           # "...",
+                                           coding))) %>%
+  count(ctry, question_text_short, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(`0`:`3`), 
+            funs(replace(., is.na(.), 0))) %>%
+  arrange(ctry, `0`) %>%
+  rownames_to_column("order") %>%
+  mutate(order = as.numeric(order),
+         nonzero_n = `1` + `2` + `3`,
+         total_n = `0` + `1` + `2` + `3`) %>%
+  gather(response, n, c(`0`, `1`, `2`, `3`)) %>%
+  mutate(response = factor(response,
+                           levels = c("0", "1", "2", "3")),
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct()
+
+adjust <- 15
+
+ggplot(d_plot %>%
+         mutate(response = factor(response,
+                                  labels = c("Never", "Sometimes", 
+                                             "Often", "Almost always"))),
+       aes(x = reorder(question_text_short, desc(question_text_short)),
+           # x = reorder(question_text_short, desc(order)),
+           y = n, fill = response)) +
+  facet_grid(. ~ ctry, scales = "free", space = "free") +
+  geom_bar(position = position_stack(), stat = "identity", 
+           color = "black", size = 0.2) +
+  geom_text(data = d_plot %>% 
+              distinct(ctry, question_text_short, order, 
+                       nonzero_n, total_n),
+            aes(y = max(d_plot$total_n) + adjust, fill = NULL,
+                label = paste0(round(nonzero_n/total_n, 2)*100, "%")), 
+            size = 3, hjust = 1) +
+  scale_y_continuous(limits = c(0, max(d_plot$total_n) + adjust)) +
+  scale_fill_brewer(palette = "PuBuGn") +
+  theme_bw() +
+  labs(title = "Responses to 'Hallucination' (Alderson-Day) scale items",
+       subtitle = "% corresponds to non-zero responses",
+       x = "", y = "Count of responses", fill = "Response") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  coord_flip()
+
+rm(adjust)
+```
+
+I have not yet looked at this in detail.
+
+# Distribution of responses for individual participants, by site
+
+Another thing we might be interested in is how individual participants responded: Were there people who said yes to everything, or no to everything? How do these distributions of responses differ across participants in different sites?
+
+Let's take a look:
+
+```{r, fig.width = 6, fig.asp = 1}
+d_long %>%
+  filter(grepl("her2", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(response = factor(response),
+         coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           labels = c("Hallucination (Alderson-Day)"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(c(`0`, `1`, `2`, `3`)), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = `0` + `1` + `2` + `3`,
+         prop_0 = `0`/total_n,
+         prop_1 = `1`/total_n,
+         prop_2 = `2`/total_n,
+         prop_3 = `3`/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  select(-c(`0`, `1`, `2`, `3`)) %>%
+  gather(response, prop, starts_with("prop")) %>%
+  mutate(response = factor(response,
+                           levels = c("prop_0", "prop_1", "prop_2", "prop_3"),
+                           labels = c("Never", "Sometimes", "Often", 
+                                      "Almost always"))) %>%
+  ggplot(aes(x = prop, fill = ctry)) +
+  facet_grid(response ~ ctry, scales = "free", space = "free") +
+  geom_histogram(binwidth = 1/9) +
+  scale_x_continuous(breaks = seq(0, 1, 0.25)) +
+  scale_y_continuous(breaks = seq(0, 100, 10)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many times participants endorsed each response option for the 'Hallucination' (Alderson-Day) scale items",
+       x = "Proportion of responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+I have not yet looked at this in detail.
+
+Just for fun, here's another way to look at the same data, overlaying the density distributions for each site on top of each other to see where they seem to be similar/different:
+
+```{r, fig.width = 3, fig.asp = 3}
+d_long %>%
+  filter(grepl("her2", question),
+         !grepl("attn", question),
+         !is.na(response)) %>%
+  left_join(question_key %>%
+              distinct(question_label_universal, 
+                       question_text,
+                       byhand_coding,
+                       byhand_subscale) %>%
+              rename(question = question_label_universal,
+                     coding = byhand_coding,
+                     subscale = byhand_subscale)) %>%
+  distinct() %>%
+  mutate(coding = factor(coding,
+                         levels = c("-1", "1"),
+                         labels = c("(REVERSED)", "")),
+         question_text_short = gsub('(.{1,130})(\\s|$)',
+                                    '\\1\n',
+                                    paste0(substr(question_text,
+                                                     start = 1, stop = 10000),
+                                              # "...",
+                                              coding)),
+         subscale = factor(subscale, 
+                           labels = c("Hallucination (Alderson-Day)"))) %>%
+  distinct() %>%
+  count(ctry, subscale, subj, response) %>%
+  spread(response, n) %>%
+  mutate_at(vars(c(`0`, `1`, `2`, `3`)), funs(replace(., is.na(.), 0))) %>%
+  mutate(total_n = `0` + `1` + `2` + `3`,
+         prop_0 = `0`/total_n,
+         prop_1 = `1`/total_n,
+         prop_2 = `2`/total_n,
+         prop_3 = `3`/total_n,
+         ctry = factor(ctry,
+                       levels = c("us", "ghana", "thailand", 
+                                  "china", "vanuatu"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu"))) %>%
+  distinct() %>%
+  select(-c(`0`, `1`, `2`, `3`)) %>%
+  gather(response, prop, starts_with("prop")) %>%
+  mutate(response = factor(response,
+                           levels = c("prop_0", "prop_1", "prop_2", "prop_3"),
+                           labels = c("Never", "Sometimes", "Often", 
+                                      "Almost always"))) %>%
+  ggplot(aes(x = prop, fill = ctry)) +
+  facet_grid(response ~ ., scales = "free", space = "fixed") +
+  geom_density(alpha = 0.3) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  labs(title = "Distributions of how many times participants endorsed each\nresponse option for the 'Hallucination' (Alderson-Day) scale items",
+       x = "Proportion of responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
