@@ -229,7 +229,7 @@ ggplot(d_plot %>%
   scale_fill_brewer(palette = "PRGn") +
   theme_bw() +
   labs(title = "Responses to 'Inner speech' (Hardy/Bentall) scale items",
-       subtitle = "% corresponds to responses of 'Agree' or 'Strongly agree'",
+       subtitle = "% corresponds to responses of 'Agree' or 'Strongly agree' (green)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),

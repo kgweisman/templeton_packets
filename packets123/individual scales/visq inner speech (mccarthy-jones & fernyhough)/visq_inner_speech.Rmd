@@ -260,7 +260,7 @@ ggplot(d_plot %>%
   scale_fill_brewer(palette = "PRGn") +
   theme_bw() +
   labs(title = "Responses to 'VISQ' (McCarthy-Jones & Fernyhough) scale items",
-       subtitle = "% corresponds to responses of 'Agree' or 'Strongly agree'",
+       subtitle = "% corresponds to responses of 'Agree' or 'Strongly agree' (green)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),
@@ -400,7 +400,7 @@ d_long %>%
                            levels = c("prop_n2", "prop_n1", "prop_n0", 
                                       "prop_p1", "prop_p2"),
                            labels = c("Strongly disagree", "Disagree",
-                                      "Neither...",
+                                      "Neither agree nor disagree",
                                       "Agree", "Strongly agree")),
          subscale = as.character(subscale),
          subscale = gsub("invo_VISQ_", "", subscale),
@@ -420,7 +420,7 @@ d_long %>%
   theme_bw() +
   labs(title = "Distributions of how many times participants endorsed each\nresponse option for the 'VISQ' (McCarthy-Jones & Fernyhough) scale items",
        x = "Proportion of responses (at the individual participant level)", y = "Count of participants", fill = "Site") +
-  theme(legend.position = "none",
+  theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 ```

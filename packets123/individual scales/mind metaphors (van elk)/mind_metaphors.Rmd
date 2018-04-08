@@ -219,7 +219,7 @@ ggplot(d_plot %>%
   scale_fill_brewer(palette = "PRGn") +
   theme_bw() +
   labs(title = "Responses to 'Mind metaphors' (Van Elk) scale items",
-       subtitle = "% corresponds to non-zero responses",
+       subtitle = "% corresponds to responses of 'Agree' or 'Strongly agree' (green)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),

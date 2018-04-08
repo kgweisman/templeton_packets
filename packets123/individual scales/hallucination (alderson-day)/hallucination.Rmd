@@ -218,7 +218,7 @@ ggplot(d_plot %>%
   scale_fill_brewer(palette = "PuBuGn") +
   theme_bw() +
   labs(title = "Responses to 'Hallucination' (Alderson-Day) scale items",
-       subtitle = "% corresponds to non-zero responses",
+       subtitle = "% corresponds to responses more than 'Never' (darker colors)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),

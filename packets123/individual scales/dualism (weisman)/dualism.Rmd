@@ -227,7 +227,7 @@ d_long %>%
   scale_alpha_discrete(guide = "none", range = c(0, 1)) +
   theme_bw() +
   labs(title = "Responses to 'Dualism' scale items",
-       subtitle = "% corresponds to those giving the more 'dualist' response, after reverse coding",
+       subtitle = "% corresponds to those giving the more 'dualist' response, after reverse coding (turquoise)",
        x = "", y = "Count of responses", fill = "Type of response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),

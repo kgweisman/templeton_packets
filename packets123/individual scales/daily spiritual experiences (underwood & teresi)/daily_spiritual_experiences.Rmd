@@ -272,7 +272,7 @@ ggplot(d_plot %>%
   scale_fill_manual(values = custom_palette) +
   theme_bw() +
   labs(title = "Responses to 'Daily spiritual experiences' (Underwood & Teresi) scale items",
-       subtitle = "'*' denotes a question where 'God' was replaced by a variety of different beings for Thai participants (questions #7, 8, 15, & 16); the participants' highest response has been retained here\n% corresponds to non-zero response",
+       subtitle = "'*' denotes a question where 'God' was replaced by a variety of different beings for Thai participants (questions #7, 8, 15, & 16); the participants' highest response has been retained here\n% corresponds to a response more than 'Never' (darker colors)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),

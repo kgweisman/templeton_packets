@@ -211,7 +211,7 @@ d_long %>%
   scale_fill_brewer(palette = "Blues") +
   theme_bw() +
   labs(title = "Responses to 'Hearing events' (Posey & Losch) scale items",
-       subtitle = "% corresponds to 'yes' response",
+       subtitle = "% corresponds to 'yes' response (darker blue)",
        x = "", y = "Count of responses", fill = "Response") +
   theme(legend.position = "top",
         plot.title = element_text(hjust = 0.5),
