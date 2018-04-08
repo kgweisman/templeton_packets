@@ -8,7 +8,7 @@ output:
   pdf_document: default
 ---
 
-This is a document describing how we check accuracy for packets that were double-entered (entered more than once).
+This is a document describing how we check accuracy for packets that were double-entered (entered more than once). (Last updated 2018-04-07.)
 
 # Setup
 

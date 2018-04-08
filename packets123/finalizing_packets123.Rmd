@@ -8,7 +8,7 @@ output:
   pdf_document: default
 ---
 
-This is a document describing how we create the final dataset. Last updated 2018-04-05.
+This is a document describing how we create the final dataset. (Last updated 2018-04-07.)
 
 # Setup
 

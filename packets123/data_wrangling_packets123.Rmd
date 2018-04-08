@@ -6,7 +6,7 @@ output:
   pdf_document: default
 ---
 
-This is a document describing how we clean up and "wrangle" data from Packets 1-3. (Last updated 2018-04-05)
+This is a document describing how we clean up and "wrangle" data from Packets 1-3. (Last updated 2018-04-07.)
 
 # Setup
 
@@ -1775,6 +1775,30 @@ dup_subj6
 ```
 
 Ok, all cleared up :)
+
+### Duplicates across versions
+
+It came to my attention that there was at least one participant (#40082) who had data for two versions of the same packet (Packet 1). Let's check to see if there's anyone else like that.
+
+```{r}
+dup_subj7 <- d_all %>%
+  distinct(subj, packet, version) %>%
+  count(subj, packet, version) %>%
+  spread(version, n) %>%
+  mutate_at(vars(`1`, `2`), funs(replace(., is.na(.), 0))) %>%
+  mutate(total = `1` + `2`) %>%
+  filter(total > 1)
+
+dup_subj7
+```
+
+Looks like it was just that person. We'll exclude both of their versions for now (since they seem to be quite different from each other...)
+
+```{r}
+d_all <- d_all %>%
+  filter(subj != dup_subj7$subj)
+```
+
 
 ### Did we get everybody?
 
