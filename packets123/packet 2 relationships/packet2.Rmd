@@ -1,6 +1,6 @@
 ---
 title: 'Packet 2: Relationships among scales'
-subtitle: 'Last updated 2018-04-05'
+subtitle: 'Last updated 2018-04-07'
 output:
   html_notebook: default
   html_document:

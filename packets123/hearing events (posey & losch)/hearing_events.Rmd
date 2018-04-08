@@ -1,6 +1,6 @@
 ---
 title: 'Grappling with the "Hearing Events" scale'
-subtitle: 'Last updated 2018-04-06'
+subtitle: 'Last updated 2018-04-07'
 output:
   html_notebook: default
   html_document:
@@ -66,11 +66,8 @@ d_long_subscale_boot <- d_long_subscale %>%
            factor(subscale,
                   levels = c("exwl", 
                              "exwl_extra",
-                             "dse_1to4", 
-                             "dse_5to14", 
-                             "dse_5to14_thai",
+                             "dse_01to14", 
                              "dse_15to16", 
-                             "dse_15to16_thai",
                              "spev", 
                              "sen_sensory_seeking", 
                              "sen_body_awareness", 
@@ -95,11 +92,8 @@ d_long_subscale_boot <- d_long_subscale %>%
                              "minw_epistemic"),
                   labels = c("absorption (tellegen)", 
                              "absorption (extra)",
-                             "daily spiritual experiences (#1-4)",
-                             "daily spiritual experiences (#5-14)",
-                             "daily spiritual experiences (#5-14 thai)",
+                             "daily spiritual experiences (#1-14)",
                              "daily spiritual experiences (#15-16)",
-                             "daily spiritual experiences (#15-16 thai)",
                              "spiritual events", 
                              "sensory seeking",
                              "body awareness", 
