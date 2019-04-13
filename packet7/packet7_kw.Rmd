@@ -1,0 +1,2186 @@
+---
+title: "Packet 7 (KW first pass)"
+subtitle: "Last updated: 2019-04-13"
+output:
+  html_notebook:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+always_allow_html: yes
+---
+
+This is Kara's first pass at looking at the Packet 7 data (with data from 2019-03-18). (Note: PDF printed portrait, 80% zoom, minimum margins.)
+
+```{r global_options, include = F}
+knitr::opts_chunk$set(fig.width = 4, fig.asp = 0.67,
+                      include = F, echo = F)
+```
+
+```{r}
+library(tidyverse)
+library(langcog)
+library(psych)
+library(readxl)
+library(cowplot)
+library(lme4)
+library(lmerTest)
+library(kableExtra)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+d_raw <- read_xlsx("./data from Nikki/Packet 7_CODED_March 18, 2019.xlsx",
+                   sheet = 1)
+```
+
+```{r}
+var_key <- d_raw[1,] %>%
+  t() %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  rename(question_text = ".") %>%
+  mutate(question_text = gsub("‚Äô", "'", question_text),
+         question_text = gsub("‚Äî", " - ", question_text),
+         question_text = gsub("‚Äú", "'", question_text),
+         question_text = gsub("‚Äù", "'", question_text)) %>%
+  mutate(order = 1:nrow(.),
+         scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         scale = ifelse(scale %in% c("entr", "2day", "ver", "batc", "resample",
+                                     "ctry", "subj", "file", "recr", "wher", 
+                                     "whoc"), "data_entry", scale)) %>%
+  select(order, scale, question, question_text) %>%
+  arrange(order)
+```
+
+```{r}
+# check for duplicates
+duplicates <- d_raw %>%
+  count(p7_ctry, p7_subj) %>%
+  filter(n > 1)
+
+d00 <- full_join(d_raw %>%
+                   filter((!p7_subj %in% duplicates$p7_subj)),
+                 d_raw %>% 
+                   filter(p7_subj %in% duplicates$p7_subj & p7_batc == 1))
+
+d00 %>%
+  count(p7_ctry, p7_subj) %>%
+  filter(n > 1)
+
+d00 %>% 
+  distinct(p7_ctry, p7_subj) %>%
+  count(p7_ctry)
+```
+
+```{r}
+d0 <- d00[-1,] %>% # get rid of question text
+  mutate_at(vars(starts_with("p7_abs_"), starts_with("p7_dse_"),
+                 starts_with("p7_se_"), starts_with("p7_wob_"),
+                 starts_with("p7_unev_"), starts_with("p7_exsen_"),
+                 starts_with("p7_hthk_"), starts_with("p7_por_"),
+                 starts_with("p7_mm_"), p7_dem_age, p7_dem_ses,
+                 p7_dem_how.sprt.relg), 
+            funs(as.numeric)) %>%
+  mutate_at(vars(p7_dem_holy.tung.gif),
+            funs(recode_factor(., "0" = "no", "1" = "yes"))) %>%
+  mutate_at(vars(p7_abs_check, p7_dse_check, p7_se_check, p7_unev_check, 
+                 p7_exsen_check, p7_por_check, p7_mm_check),
+            funs(recode_factor(., "0" = "pass", "1" = "fail"))) %>%
+  mutate_at(vars(p7_abs_child.exp:p7_abs_sunset),
+            funs("cat" = recode(., "0" = F, "1" = T))) %>%
+  mutate_at(vars(p7_dse_god.prescn:p7_dse_accept.wrong),
+            funs("cat" = recode_factor(., 
+                                       "0" = "never",
+                                       "1" = "once in a while",
+                                       "2" = "some days",
+                                       "3" = "most days",
+                                       "4" = "every day",
+                                       "5" = "many times a day"))) %>%
+  mutate_at(vars(p7_se_voice.out:p7_se_own.healing),
+            funs("cat" = recode_factor(., 
+                                       "0" = "never",
+                                       "1" = "once",
+                                       "2" = "several times",
+                                       "3" = "fairly often",
+                                       "4" = "very often"))) %>%
+  mutate_at(vars(p7_wob_set.mind_reverse:p7_wob_future.on.me_reverse),
+            funs("cat" = recode_factor(., 
+                                       "-3" = "strongly disagree",
+                                       "-2" = "somewhat disagree",
+                                       "-1" = "a little disagree",
+                                       "0" = "neither agree nor disagree",
+                                       "1" = "a little agree",
+                                       "2" = "somewhat agree",
+                                       "3" = "strongly agree"))) %>%
+  mutate_at(vars(p7_wob_little.change:p7_wob_pushed.around),
+            funs("cat" = recode_factor(., 
+                                       "3" = "strongly disagree",
+                                       "2" = "somewhat disagree",
+                                       "1" = "a little disagree",
+                                       "0" = "neither agree nor disagree",
+                                       "-1" = "a little agree",
+                                       "-2" = "somewhat agree",
+                                       "-3" = "strongly agree"))) %>%
+  mutate_at(vars(p7_unev_voice.aloud:p7_unev_shadows),
+            funs("cat" = recode_factor(., 
+                                       "0" = "never",
+                                       "1" = "sometimes",
+                                       "2" = "often",
+                                       "3" = "almost always"))) %>%
+  mutate_at(vars(p7_exsen_esp.exists:p7_exsen_send.msg),
+            funs("cat" = recode_factor(., 
+                                       "0" = "has not had the experience (no)",
+                                       "1" = "has had the experience (yes)"))) %>%
+  mutate_at(vars(p7_hthk_complex:p7_hthk_responsblt, p7_hthk_long.hrs,
+                 p7_hthk_way.to.top:p7_hthk_new.soltions,
+                 p7_hthk_puzzles:p7_hthk_intel.task, p7_hthk_not.personal),
+            funs("cat" = recode_factor(., 
+                                       "-2" = "extremely not like me",
+                                       "-1" = "somewhat not like me",
+                                       "0" = "not sure",
+                                       "1" = "somewhat like me",
+                                       "2" = "extremely like me"))) %>%
+  mutate_at(vars(p7_hthk_not.fun:p7_hthk_avoid.think, 
+                 p7_hthk_hrd.hav.to:p7_hthk_lil.thought, p7_hthk_not.exciting,
+                 p7_hthk_mental.effrt:p7_hthk_job.done),
+            funs("cat" = recode_factor(., 
+                                       "2" = "extremely not like me",
+                                       "1" = "somewhat not like me",
+                                       "0" = "not sure",
+                                       "-1" = "somewhat like me",
+                                       "-2" = "extremely like me"))) %>%
+  mutate_at(vars(p7_por_thgs.hrt, p7_por_wifi.thgs:p7_por_angr.cntrl,
+                 p7_por_sprt.envy:p7_por_read.thgs, p7_por_stre.spoil,
+                 p7_por_conslt.unseen:p7_por_spkn.curse,
+                 p7_por_curse.sick:p7_por_fall.in.lov,
+                 p7_por_thgs.heal:p7_por_visualization),
+            funs("cat" = recode_factor(., 
+                                       "0" = "it does not happen",
+                                       "1" = "it might happen",
+                                       "2" = "it definitely happens"))) %>%
+  mutate_at(vars(p7_por_thgs.hurt_a:p7_por_thgs.hurt_c,
+                 p7_por_angr.cntrl_a:p7_por_angr.cntrl_c,
+                 p7_por_read.thgs_a:p7_por_read.thgs_c,
+                 p7_por_stre.spoil_a:p7_por_stre.spoil_c,
+                 p7_por_spkn.curse_a:p7_por_spkn.curse_c,
+                 p7_por_fall.in.lov_a:p7_por_fall.in.lov_c),
+            funs("cat" = recode_factor(., 
+                                       "0" = "no",
+                                       "1" = "a little",
+                                       "2" = "a lot"))) %>%
+  mutate_at(vars(p7_mm_ang_feel.hurt:p7_mm_sprt.thgs.hurt),
+            funs("cat" = recode_factor(., 
+                                       "0" = "never",
+                                       "1" = "rarely",
+                                       "2" = "often",
+                                       "3" = "very often"))) %>%
+  mutate(p7_ctry = recode_factor(p7_ctry,
+                                 "1" = "US",
+                                 "4" = "Ghana",
+                                 "3" = "Thailand",
+                                 "2" = "China",
+                                 "5" = "Vanuatu"),
+         p7_subj = factor(p7_subj),
+         p7_dem_sex = recode_factor(p7_dem_sex, 
+                                    "1" = "male", 
+                                    "2" = "female", 
+                                    "3" = "other"),
+         p7_dem_rur.urb = recode_factor(p7_dem_rur.urb,
+                                        "1" = "rural",
+                                        "2" = "urban"),
+         p7_dem_affrd.basics = recode_factor(p7_dem_affrd.basics,
+                                             "1" = "no",
+                                             "0" = "yes"),
+         p7_dem_ses_cat = recode_factor(p7_dem_ses,
+                                        "-2" = "much poorer",
+                                        "-1" = "a little poorer",
+                                        "0" = "about the same",
+                                        "1" = "a little richer",
+                                        "2" = "much richer")) %>%
+  select(-c(p7_entr:p7_resample, p7_file:p7_whoc)) %>%
+  distinct()
+```
+
+```{r}
+# count anyone who failed any attention checks
+# exclude anyone who failed any attention checks
+# d_fail <- d0 %>%
+#   filter(p7_abs_check == "fail" | p7_dse_check == "fail" | 
+#            p7_se_check == "fail" | p7_unev_check == "fail" | 
+#            p7_exsen_check == "fail" | p7_por_check == "fail" |
+#            p7_mm_check == "fail")
+# d_fail %>% count(p7_ctry)
+
+d0 %>% 
+  select(p7_ctry, p7_subj, contains("check")) %>%
+  gather(scale, attention_check, contains("check")) %>%
+  count(p7_ctry, scale, attention_check) %>%
+  spread(attention_check, n) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale))
+
+# exclude anyone who failed any attention checks
+d <- d0 %>%
+  filter(p7_abs_check != "fail", p7_dse_check != "fail", p7_se_check != "fail",
+         p7_unev_check != "fail", p7_exsen_check != "fail",
+         p7_por_check != "fail", p7_mm_check != "fail")
+```
+
+```{r}
+# # check country codes
+# d %>% 
+#   distinct(p7_ctry, p7_subj) %>%
+#   mutate(p7_subj_firstdig = substr(p7_subj, 1, 1)) %>%
+#   count(p7_ctry, p7_subj_firstdig)
+```
+
+
+# Confirmatory hypotheses (as specified in preregistration)
+
+_Note: I included all participants, even if they failed attention checks, since we did not specify that we would exclude participants in the preregistration. At some point we should try running everything on the subset of participants who passed all attention checks just so that we know, but this decreases our sample sizes pretty dramatically._
+
+```{r}
+# standardize, collapsing across participants
+d_std <- d0 %>% # including all participants
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, contains("total")) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(scale) %>%
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  select(-score) %>%
+  spread(scale, score_std)
+```
+
+```{r}
+# standardize, collapsing across participants
+d_std_bysite <- d0 %>% # including all participants
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, contains("total")) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(p7_ctry, scale) %>% # group by site
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  select(-score) %>%
+  spread(scale, score_std)
+```
+
+
+<P style="page-break-before: always">
+## Hypothesis #1
+
+__Hypothesis #1: People who score higher on the Tellegen Absorption Scale (Tellegen & Atkinson, 1974) also report more spiritual experiences.__
+
+Preregistered analysis: "We will standardize scores on each measure, collapsing across field sites, and then conduct a mixed-effects linear regression, using absorption scores to predict reports of spiritual experiences, allowing for differences across our five field sites and across the two scales we used to measure spiritual experience. Using the “lme4” package for R (Bates, 2018), we will specify this model as follows: experience ~ absorption * site * scale + (1 | subject), where “scale” is a categorical variable comparing the two spiritual experience scales (effect-coded), and “site” is a categorical variable comparing the five field sites (effect-coded). Our prediction is that the main effect of absorption on experience will be significantly positive (b > 0, t > 2, p < 0.05 using Satterthwaite's degrees of freedom method as implemented in the “lmerTest” package for R, Kuznetsova, Brockhoff, & Christensen, 2017). (The rest of the parameters included in the model will be of great interest to us, but are exploratory.)
+
+If we have trouble fitting these models or there are other signs of model fit problems, we will consider the following alternative model: experience ~ absorption * scale + (1 | site/subject)."
+
+Here are our results:
+
+```{r}
+d_std_h1 <- d_std %>%
+  distinct(p7_ctry, p7_subj, dse, se, abs) %>%
+  gather(scale, experience, c(dse, se)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_h1$scale) <- contr.sum(2)
+contrasts(d_std_h1$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r1 <- lmer(experience ~ abs * p7_ctry * scale + (1 | p7_subj), d_std_h1)
+# summary(r1)
+```
+
+```{r, include = T}
+summary(r1)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+```{r}
+h1_sum <- d0 %>% 
+  distinct(p7_ctry, p7_subj, p7_abs_total, p7_dse_total, p7_se_total) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(scale) %>%
+  summarise(mean = mean(score),
+            stdev = sd(score)) %>%
+  ungroup()
+h1_sum
+```
+
+**We found evidence in favor of Hypothesis #1**: As predicted, the main effect of absorption was significantly positive (see bolded row in table above). 
+
+For every increase of 1 standard deviation in absorption, participants (on average) increased by `r summary(r1)$coefficients["abs", "Estimate"] %>% round(2)` standard deviations in their spiritual experiences. In concrete terms, this means that for every increase of `r h1_sum$stdev[h1_sum$scale == "abs"] %>% round(2)` points on the Absorption scale (range: 0-34), participants (on average) increased by `r (summary(r1)$coefficients["abs", "Estimate"] * h1_sum$stdev[h1_sum$scale == "dse"]) %>% round(2)` points on the Daily Spiritual Experiences scale (range: 0-70) or `r (summary(r1)$coefficients["abs", "Estimate"] * h1_sum$stdev[h1_sum$scale == "se"]) %>% round(2)` points on the Spiritual Events scale (range: 0-80).
+
+```{r}
+h1_plot_a <- d_std_h1 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = abs, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #1: By site and scale",
+       x = "Absorption score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h1_plot_b <- d_std_h1 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = abs, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #1: Overall",
+       x = "Absorption score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h1_plot_a, h1_plot_b, rel_widths = c(2, 1))
+```
+
+<P style="page-break-before: always">
+## Hypothesis #2
+
+__Hypothesis #2: People who score higher on our two porosity indices also report more spiritual experiences.__
+
+Preregistered analysis: "We will standardize scores on each measure, collapsing across field sites, and then conduct a mixed-effects linear regression, using porosity scores (from each of our two indices) to predict reports of spiritual experiences across the 2 spiritual experience scales included in our survey packet, allowing for differences across our five field sites and across the two scales we used to measure spiritual experience. Using the “lme4” package for R (Bates, 2018), we will specify this model as follows: experience ~ porosity * site * scale + (1 | subject), where “scale” is a categorical variable comparing the two spiritual experience scales (effect-coded), and “site” is a categorical variable comparing the five field sites (effect-coded). We will run two versions of this model, one using each of the two “porosity” measures described above. For each regression, our prediction is that the main effect of porosity on experience will be significantly positive (b > 0, t > 2, p < 0.05 using Satterthwaite's degrees of freedom method as implemented in the “lmerTest” package for R, Kuznetsova, Brockhoff, & Christensen, 2017). (The rest of the parameters included in the model will be of great interest to us, but are exploratory.)
+
+If we have trouble fitting these models or there are other signs of model fit problems, we will consider the following alternative model: experience ~ porosity * scale + (1 | site/subject)."
+
+Here are our results, using the Porosity scale (Dulin):
+
+```{r}
+d_std_h2 <- d_std %>%
+  distinct(p7_ctry, p7_subj, dse, se, por, mm) %>%
+  gather(scale, experience, c(dse, se)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_h2$scale) <- contr.sum(2)
+contrasts(d_std_h2$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r2_por <- lmer(experience ~ por * p7_ctry * scale + (1 | p7_subj), d_std_h2)
+# summary(r2_por)
+```
+
+```{r, include = T}
+summary(r2_por)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+<P style="page-break-before: always">
+And here are our results, using the Martha Story scale:
+
+```{r}
+r2_mm <- lmer(experience ~ mm * p7_ctry * scale + (1 | p7_subj), d_std_h2)
+# summary(r2_mm)
+```
+
+```{r, include = T}
+summary(r2_mm)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+```{r}
+h2_sum <- d0 %>% 
+  distinct(p7_ctry, p7_subj, p7_por_total, p7_mm_total,
+           p7_dse_total, p7_se_total) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(scale) %>%
+  summarise(mean = mean(score),
+            stdev = sd(score)) %>%
+  ungroup()
+h2_sum
+```
+
+In both cases, **we found evidence in favor of Hypothesis #2**: As predicted, the main effect of porosity was significantly positive in both regression analyses (see bolded rows in tables above). 
+
+For every increase of 1 standard deviation in porosity as indexed by the Porosity (Dulin) scale, participants (on average) increased by `r summary(r2_por)$coefficients["por", "Estimate"] %>% round(2)` standard deviations in their spiritual experiences. In concrete terms, this means that for every increase of `r h2_sum$stdev[h2_sum$scale == "por"] %>% round(2)` points on the Porosity scale (range: 0-34), participants (on average) increased by `r (summary(r2_por)$coefficients["por", "Estimate"] * h2_sum$stdev[h2_sum$scale == "dse"]) %>% round(2)` points on the Daily Spiritual Experiences scale (range: 0-70) or `r (summary(r2_por)$coefficients["por", "Estimate"] * h2_sum$stdev[h2_sum$scale == "se"]) %>% round(2)` points on the Spiritual Events scale (range: 0-80). 
+
+For every increase of 1 standard deviation in porosity as indexed by the Martha Story scale, participants (on average) increased by `r summary(r2_mm)$coefficients["mm", "Estimate"] %>% round(2)` standard deviations in their spiritual experiences. In concrete terms, this means that for every increase of `r h2_sum$stdev[h2_sum$scale == "mm"] %>% round(2)` points on the Martha Story scale (range: 0-54), participants (on average) increased by `r (summary(r2_mm)$coefficients["mm", "Estimate"] * h2_sum$stdev[h2_sum$scale == "dse"]) %>% round(2)` points on the Daily Spiritual Experiences scale (range: 0-70) or `r (summary(r2_mm)$coefficients["mm", "Estimate"] * h2_sum$stdev[h2_sum$scale == "se"]) %>% round(2)` points on the Spiritual Events scale (range: 0-80).
+
+```{r}
+h2_plot_a1 <- d_std_h2 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = por, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #2: By site and scale (using Dulin Porosity scale)",
+       x = "Porosity score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h2_plot_b1 <- d_std_h2 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = por, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #2: Overall",
+       x = "Porosity score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h2_plot_a1, h2_plot_b1, rel_widths = c(2, 1))
+```
+
+```{r}
+h2_plot_a2 <- d_std_h2 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = mm, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #2: By site and scale (using Martha Story scale)",
+       x = "Martha Story score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h2_plot_b2 <- d_std_h2 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = mm, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #2: Overall",
+       x = "Martha Story score (standardized collapsing across sites)",
+       y = "Spiritual experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h2_plot_a2, h2_plot_b2, rel_widths = c(2, 1))
+```
+
+<P style="page-break-before: always">
+## Hypothesis #3
+
+__Hypothesis #3: The positive relationship between absorption and experience is statistically significant in each field site individually.__
+
+Preregistered analysis: "For each of our five field sites, we will standardize scores on each measure (considering only participants from that field site), and then conduct the same analyses specified above for [Hypothesis #1] to assess the relationship[] between absorption and spiritual experience [...] in each field site individually. For Hypothesis #3, our models will take the following form: experience ~ absorption * scale + (1 | subject). [...] Again, our prediction is that the main effect of absorption on experience and of each porosity measure on experience will be significantly positive (b > 0, p < 0.05)."
+
+Here are our results:
+
+```{r}
+d_std_bysite_h1 <- d_std_bysite %>%
+  distinct(p7_ctry, p7_subj, dse, se, abs) %>%
+  gather(scale, experience, c(dse, se)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_bysite_h1$scale) <- contr.sum(2)
+contrasts(d_std_bysite_h1$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r3_us <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1 %>% filter(p7_ctry == "US"))
+# summary(r3_us)
+```
+
+```{r}
+r3_gh <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1 %>% filter(p7_ctry == "Ghana"))
+# summary(r3_gh)
+```
+
+```{r}
+r3_th <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1 %>% filter(p7_ctry == "Thailand"))
+# summary(r3_th)
+```
+
+```{r}
+r3_ch <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1 %>% filter(p7_ctry == "China"))
+# summary(r3_ch)
+```
+
+```{r}
+r3_vt <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1 %>% filter(p7_ctry == "Vanuatu"))
+# summary(r3_vt)
+```
+
+```{r, include = T}
+rbind(summary(r3_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r3_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r3_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r3_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r3_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+**We found evidence in favor of Hypothesis #3 in all sites _except_ Vanuatu**: As predicted, the main effect of absorption was significantly positive in the US, Ghana, Thailand, and China—but this was not the case in Vanuatu (although some would consider the effect "marginally significant"; see bolded rows in table above).
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+ggplot(d_std_bysite_h1 %>%
+         mutate(scale = recode(scale,
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events")), 
+       aes(x = abs, y = experience, color = p7_ctry)) + 
+  facet_grid(scale ~ p7_ctry) + 
+  geom_jitter(alpha = 0.5, show.legend = F) + 
+  geom_smooth(method = "lm", color = "black", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #3",
+       x = "Absorption score (standardized within each site)",
+       y = "Spiritual experience score (standardized within each site)")
+```
+
+(See other relevant plots under "Hypothesis #1," above.)
+
+
+<P style="page-break-before: always">
+## Hypothesis #4
+
+__Hypothesis #4: The positive relationship between absorption and experience is statistically significant in each field site individually.__
+
+Preregistered analysis: "For each of our five field sites, we will standardize scores on each measure (considering only participants from that field site), and then conduct the same analyses specified above for [Hypothesis #2] to assess the relationship[...] between porosity and experience in each field site individually. [...] For Hypothesis #4, our models will take the following form: experience ~ porosity * scale + (1 | subject). [...] Again, our prediction is that the main effect of absorption on experience and of each porosity measure on experience will be significantly positive (b > 0, p < 0.05)."
+
+Here are our results, using the Porosity scale (Dulin):
+
+```{r}
+d_std_bysite_h4 <- d_std_bysite %>%
+  distinct(p7_ctry, p7_subj, dse, se, por, mm) %>%
+  gather(scale, experience, c(dse, se)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_bysite_h4$scale) <- contr.sum(2)
+contrasts(d_std_bysite_h4$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r4_por_us <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "US"))
+# summary(r4_por_us)
+```
+
+```{r}
+r4_por_gh <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Ghana"))
+# summary(r4_por_gh)
+```
+
+```{r}
+r4_por_th <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Thailand"))
+# summary(r4_por_th)
+```
+
+```{r}
+r4_por_ch <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "China"))
+# summary(r4_por_ch)
+```
+
+```{r}
+r4_por_vt <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Vanuatu"))
+# summary(r4_por_vt)
+```
+
+```{r, include = T}
+rbind(summary(r4_por_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r4_por_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r4_por_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r4_por_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r4_por_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+Using the Porosity scale, **We found evidence in favor of Hypothesis #4 in all sites**: As predicted, the main effect of porosity was significantly positive in the US, Ghana, Thailand, China, and Vanuatu (see bolded rows in table above).
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+d_std_bysite_h4 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = por, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #4 (using Porosity scale)",
+       x = "Porosity score (standardized within each site)",
+       y = "Spiritual experience score (standardized within each site)")
+```
+
+<P style="page-break-before: always">
+And here are our results, using the Martha Story scale:
+
+```{r}
+r4_mm_us <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "US"))
+# summary(r4_mm_us)
+```
+
+```{r}
+r4_mm_gh <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Ghana"))
+# summary(r4_mm_gh)
+```
+
+```{r}
+r4_mm_th <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Thailand"))
+# summary(r4_mm_th)
+```
+
+```{r}
+r4_mm_ch <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "China"))
+# summary(r4_mm_ch)
+```
+
+```{r}
+r4_mm_vt <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4 %>% filter(p7_ctry == "Vanuatu"))
+# summary(r4_mm_vt)
+```
+
+```{r, include = T}
+rbind(summary(r4_mm_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r4_mm_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r4_mm_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r4_mm_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r4_mm_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+Using the Martha Story scale, **We found evidence in favor of Hypothesis #4 in all sites _except_ Vanuatu**: As predicted, the main effect of Martha Story was significantly positive in the US, Ghana, Thailand, and China—but this was not the case in Vanuatu (see bolded rows in table above).
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+d_std_bysite_h4 %>%
+  mutate(scale = recode(scale,
+                        "dse" = "Daily spiritual experiences",
+                        "se" = "Spiritual events")) %>%
+  ggplot(aes(x = mm, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #4 (using Martha Story scale)",
+       x = "Martha Story score (standardized within each site)",
+       y = "Spiritual experience score (standardized within each site)")
+```
+
+(See other relevant plots under "Hypothesis #2," above.)
+
+
+<P style="page-break-before: always">
+# Secondary exploratory analyses
+
+## "Secular" experiences
+
+From preregistration: "First, in order to explore the question of whether affirmation of spiritual experience, porosity and absorption are simply due to the religiosity of participants, we will conduct additional analyses focusing on the two “secular” experience scales (the revised Launay Slade scale, Morrison, Wells and Nothard 2000]; and the Sheep-Goat [paranormal] scale, Thalborne & Delin, 1993). These analyses will be identical to the primary analyses outlined above, except that they will only include these two “secular experience” scales and not the two spiritual experience scales. We consider these to be exploratory analyses."
+
+### Parallel to Hypothesis #1
+
+```{r}
+d_std_h1_sec <- d_std %>%
+  distinct(p7_ctry, p7_subj, unev, exsen, abs) %>%
+  gather(scale, experience, c(unev, exsen)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_h1_sec$scale) <- contr.sum(2)
+contrasts(d_std_h1_sec$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r1_sec <- lmer(experience ~ abs * p7_ctry * scale + (1 | p7_subj), 
+               d_std_h1_sec)
+# summary(r1_sec)
+```
+
+```{r, include = T}
+summary(r1_sec)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+```{r}
+h1_sec_sum <- d0 %>% 
+  distinct(p7_ctry, p7_subj, p7_abs_total, p7_unev_total, p7_exsen_total) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(scale) %>%
+  summarise(mean = mean(score),
+            stdev = sd(score)) %>%
+  ungroup()
+h1_sec_sum
+```
+
+In parallel to Hypothesis #1, **the relationship between absorption and _secular_ experience was also significantly positive** (see bolded row table above).
+
+For every increase of 1 standard deviation in absorption, participants (on average) increased by `r summary(r1_sec)$coefficients["abs", "Estimate"] %>% round(2)` standard deviations in their secular experiences. In concrete terms, this means that for every increase of `r h1_sec_sum$stdev[h1_sec_sum$scale == "abs"] %>% round(2)` points on the Absorption scale (range: 0-34), participants (on average) increased by `r (summary(r1_sec)$coefficients["abs", "Estimate"] * h1_sec_sum$stdev[h1_sec_sum$scale == "unev"]) %>% round(2)` points on the Uncommon Events scale (range: 0-18) or `r (summary(r1_sec)$coefficients["abs", "Estimate"] * h1_sec_sum$stdev[h1_sec_sum$scale == "exsen"]) %>% round(2)` points on the Extrasensory scale (range: 0-7).
+
+This was actually a (numerically) _stronger_ effect than what we documented for spiritual experiences (b = `r summary(r1_sec)$coefficients["abs", "Estimate"] %>% round(2)` vs. b = `r summary(r1)$coefficients["abs", "Estimate"] %>% round(2)`). We did not provide a prediction about whether or not this would be the case in the preregistration.
+
+```{r}
+h1_sec_plot_a <- d_std_h1_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = abs, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to Hypothesis #1: By site and scale",
+       x = "Absorption score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h1_sec_plot_b <- d_std_h1_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = abs, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to Hypothesis #1: Overall",
+       x = "Absorption score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h1_sec_plot_a, h1_sec_plot_b, rel_widths = c(2, 1))
+```
+
+<P style="page-break-before: always">
+### Parallel to Hypothesis #2
+
+Here are our results, using the Porosity scale (Dulin):
+
+```{r}
+d_std_h2_sec <- d_std %>%
+  distinct(p7_ctry, p7_subj, unev, exsen, por, mm) %>%
+  gather(scale, experience, c(unev, exsen)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_h2_sec$scale) <- contr.sum(2)
+contrasts(d_std_h2_sec$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r2_sec_por <- lmer(experience ~ por * p7_ctry * scale + (1 | p7_subj), 
+                   d_std_h2_sec)
+# summary(r2_sec_por)
+```
+
+```{r, include = T}
+summary(r2_sec_por)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+<P style="page-break-before: always">
+And here are our results, using the Martha Story scale:
+
+```{r}
+r2_sec_mm <- lmer(experience ~ mm * p7_ctry * scale + (1 | p7_subj), 
+                  d_std_h2_sec)
+# summary(r2_sec_mm)
+```
+
+```{r, include = T}
+summary(r2_sec_mm)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(2, bold = T)
+```
+
+```{r}
+h2_sec_sum <- d0 %>% 
+  distinct(p7_ctry, p7_subj, p7_por_total, p7_mm_total,
+           p7_unev_total, p7_exsen_total) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale)) %>%
+  group_by(scale) %>%
+  summarise(mean = mean(score),
+            stdev = sd(score)) %>%
+  ungroup()
+h2_sec_sum
+```
+
+In parallel to Hypothesis #2, in both cases, **the relationship between porosity and _secular_ experience was significantly positive** (see bolded rows in tables above). 
+
+For every increase of 1 standard deviation in porosity as indexed by the Porosity (Dulin) scale, participants (on average) increased by `r summary(r2_sec_por)$coefficients["por", "Estimate"] %>% round(2)` standard deviations in their secular experiences. In concrete terms, this means that for every increase of `r h2_sec_sum$stdev[h2_sec_sum$scale == "por"] %>% round(2)` points on the Porosity scale (range: 0-34), participants (on average) increased by `r (summary(r2_sec_por)$coefficients["por", "Estimate"] * h2_sec_sum$stdev[h2_sec_sum$scale == "unev"]) %>% round(2)` points on the Uncommon Events scale (range: 0-18) or `r (summary(r2_sec_por)$coefficients["por", "Estimate"] * h2_sec_sum$stdev[h2_sec_sum$scale == "exsen"]) %>% round(2)` points on the Extrasensory scale (range: 0-7).
+
+For every increase of 1 standard deviation in porosity as indexed by the Martha Story scale, participants (on average) increased by `r summary(r2_sec_mm)$coefficients["mm", "Estimate"] %>% round(2)` standard deviations in their secular experiences. In concrete terms, this means that for every increase of `r h2_sec_sum$stdev[h2_sec_sum$scale == "mm"] %>% round(2)` points on the Martha Story scale (range: 0-54), participants (on average) increased by `r (summary(r2_sec_mm)$coefficients["mm", "Estimate"] * h2_sec_sum$stdev[h2_sec_sum$scale == "unev"]) %>% round(2)` points on the Uncommon Events scale (range: 0-18) or `r (summary(r2_sec_mm)$coefficients["mm", "Estimate"] * h2_sec_sum$stdev[h2_sec_sum$scale == "exsen"]) %>% round(2)` points on the Extrasensory scale (range: 0-7).
+
+These were actually (numerically) _stronger_ effects than what we documented for spiritual experiences (Porosity: b = `r summary(r2_sec_por)$coefficients["por", "Estimate"] %>% round(2)` vs. b = `r summary(r2_por)$coefficients["por", "Estimate"] %>% round(2)`; Martha Story: b = `r summary(r2_sec_mm)$coefficients["mm", "Estimate"] %>% round(2)` vs. b = `r summary(r2_mm)$coefficients["mm", "Estimate"] %>% round(2)`). We did not provide a prediction about whether or not this would be the case in the preregistration.
+
+```{r}
+h2_plot_a1 <- d_std_h2_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = por, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to hypothesis #2: By site and scale (using Dulin Porosity scale)",
+       x = "Porosity score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h2_plot_b1 <- d_std_h2_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = por, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to hypothesis #2: Overall",
+       x = "Porosity score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h2_plot_a1, h2_plot_b1, rel_widths = c(2, 1))
+```
+
+```{r}
+h2_plot_a2 <- d_std_h2_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = mm, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to hypothesis #2: By site and scale (using Martha Story scale)",
+       x = "Martha Story score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r}
+h2_plot_b2 <- d_std_h2_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = mm, y = experience)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to hypothesis #2: Overall",
+       x = "Martha Story score (standardized collapsing across sites)",
+       y = "Secular experience score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.4, include = T}
+plot_grid(h2_plot_a2, h2_plot_b2, rel_widths = c(2, 1))
+```
+
+<P style="page-break-before: always">
+### Parallel to Hypothesis #3
+
+Here are our results:
+
+```{r}
+d_std_bysite_h1_sec <- d_std_bysite %>%
+  distinct(p7_ctry, p7_subj, unev, exsen, abs) %>%
+  gather(scale, experience, c(unev, exsen)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_bysite_h1_sec$scale) <- contr.sum(2)
+contrasts(d_std_bysite_h1_sec$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r3_sec_us <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1_sec %>% filter(p7_ctry == "US"))
+# summary(r3_sec_us)
+```
+
+```{r}
+r3_sec_gh <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1_sec %>% filter(p7_ctry == "Ghana"))
+# summary(r3_sec_gh)
+```
+
+```{r}
+r3_sec_th <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1_sec %>% filter(p7_ctry == "Thailand"))
+# summary(r3_sec_th)
+```
+
+```{r}
+r3_sec_ch <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1_sec %>% filter(p7_ctry == "China"))
+# summary(r3_sec_ch)
+```
+
+```{r}
+r3_sec_vt <- lmer(experience ~ abs * scale + (1 | p7_subj), 
+              d_std_bysite_h1_sec %>% filter(p7_ctry == "Vanuatu"))
+# summary(r3_sec_vt)
+```
+
+```{r, include = T}
+rbind(summary(r3_sec_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r3_sec_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r3_sec_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r3_sec_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r3_sec_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+In parallel to Hypothesis #3, **the relationship between absorption and _secular_ experience was significantly positive in _all_ sites**, including Vanuatu (where the relationship with spiritual experience was _not_ significantly positive; see bolded rows in table above). We did not provide a prediction about whether or not this would be the case in the preregistration.
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+ggplot(d_std_bysite_h1_sec %>%
+         mutate(scale = recode(scale,
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory")), 
+       aes(x = abs, y = experience, color = p7_ctry)) + 
+  facet_grid(scale ~ p7_ctry) + 
+  geom_jitter(alpha = 0.5, show.legend = F) + 
+  geom_smooth(method = "lm", color = "black", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to Hypothesis #3",
+       x = "Absorption score (standardized within each site)",
+       y = "Secular experience score (standardized within each site)")
+```
+
+(See other relevant plots under "Parallel to Hypothesis #1," above.)
+
+<P style="page-break-before: always">
+### Parallel to Hypothesis #4
+
+```{r}
+d_std_bysite_h4_sec <- d_std_bysite %>%
+  distinct(p7_ctry, p7_subj, unev, exsen, por, mm) %>%
+  gather(scale, experience, c(unev, exsen)) %>%
+  mutate(scale = factor(scale))
+
+contrasts(d_std_bysite_h4_sec$scale) <- contr.sum(2)
+contrasts(d_std_bysite_h4_sec$p7_ctry) <- contr.sum(5)
+```
+
+```{r}
+r4_sec_por_us <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "US"))
+# summary(r4_sec_por_us)
+```
+
+```{r}
+r4_sec_por_gh <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Ghana"))
+# summary(r4_sec_por_gh)
+```
+
+```{r}
+r4_sec_por_th <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Thailand"))
+# summary(r4_sec_por_th)
+```
+
+```{r}
+r4_sec_por_ch <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "China"))
+# summary(r4_sec_por_ch)
+```
+
+```{r}
+r4_sec_por_vt <- lmer(experience ~ por * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Vanuatu"))
+# summary(r4_sec_por_vt)
+```
+
+```{r, include = T}
+rbind(summary(r4_sec_por_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r4_sec_por_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r4_sec_por_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r4_sec_por_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r4_sec_por_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+In parallel to Hypothesis #4, using the Porosity (Dulin) scale, **the relationship between porosity and _secular_ experience was significantly positive in _all_ sites**, including Vanuatu (where the relationship with spiritual experience was _not_ significantly positive; see bolded rows in table above). We did not provide a prediction about whether or not this would be the case in the preregistration.
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+d_std_bysite_h4_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = por, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to Hypothesis #4 (using Porosity scale)",
+       x = "Porosity score (standardized within each site)",
+       y = "Secular experience score (standardized within each site)")
+```
+
+<P style="page-break-before: always">
+And here are our results, using the Martha Story scale:
+
+```{r}
+r4_sec_mm_us <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "US"))
+# summary(r4_sec_mm_us)
+```
+
+```{r}
+r4_sec_mm_gh <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Ghana"))
+# summary(r4_sec_mm_gh)
+```
+
+```{r}
+r4_sec_mm_th <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Thailand"))
+# summary(r4_sec_mm_th)
+```
+
+```{r}
+r4_sec_mm_ch <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "China"))
+# summary(r4_sec_mm_ch)
+```
+
+```{r}
+r4_sec_mm_vt <- lmer(experience ~ mm * scale + (1 | p7_subj), 
+              d_std_bysite_h4_sec %>% filter(p7_ctry == "Vanuatu"))
+# summary(r4_sec_mm_vt)
+```
+
+```{r, include = T}
+rbind(summary(r4_sec_mm_us)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "US"),
+      summary(r4_sec_mm_gh)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Ghana"),
+      summary(r4_sec_mm_th)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Thailand"),
+      summary(r4_sec_mm_ch)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "China"),
+      summary(r4_sec_mm_vt)$coefficients %>%
+        data.frame() %>%
+        rownames_to_column("parameter") %>%
+        mutate(site = "Vanuatu")) %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-c(parameter, p, site)), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  select(-site) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  group_rows("US", 1, 4) %>%
+  group_rows("Ghana", 5, 8) %>%
+  group_rows("Thailand", 9, 12) %>%
+  group_rows("China", 13, 16) %>%
+  group_rows("Vanuatu", 17, 20) %>%
+  row_spec(c(seq(2, 18, 4)), bold = T)
+```
+
+In parallel to Hypothesis #4, using the Martha Story scale, **the relationship between porosity and _secular_ experience was significantly positive in all sites _except_ Vanuatu** (where the relationship with spiritual experience was also _not_ significantly positive; see bolded rows in table above). We did not provide a prediction about whether or not this would be the case in the preregistration.
+
+```{r, fig.width = 4, fig.asp = 0.6, include = T}
+d_std_bysite_h4_sec %>%
+  mutate(scale = recode(scale,
+                        "unev" = "Uncommon events",
+                        "exsen" = "Extrasensory")) %>%
+  ggplot(aes(x = mm, y = experience, color = p7_ctry)) +
+  facet_grid(scale ~ p7_ctry) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Secular parallel to Hypothesis #4 (using Martha Story scale)",
+       x = "Martha Story score (standardized within each site)",
+       y = "Secular experience score (standardized within each site)")
+```
+
+(See other relevant plots under "Parallel to Hypothesis #2," above.)
+
+<P style="page-break-before: always">
+## "Control" scales (Hypothesis #5)
+
+From preregistration: "Second, in order to examine whether the hypothesized relationships between absorption and experience and between porosity and experience can be explained by a lower-level processes—namely, individual or cross-cultural differences in an overall tendency to agree with the questions posed by these scales (i.e., a “yes” bias), we will also examine the relationships between the two “control” scales (the Sense of Control scale, Lachman & Weaver, 1998; and the Need for Cognition scale, Cacioppo, Petty, & Kao, 1993) and our measures of absorption, porosity, and experience. This provides something of a negative control for our primary hypotheses. Our prediction is that any relationships with these control measures will be weaker than the relationships among absorption, porosity, and experience. To assess this, we will standardize scores on each measure, collapsing across field sites, and then conduct a mixed-effects linear regression, using scores on absorption, porosity, and control scales to predict reports of spiritual experiences. Using the “stats” package for R, we will specify this model as follows: experience ~ score * predictor * site  + (1 | subject), where “site” is a categorical variable comparing the five field sites (effect-coded), and—critically—“predictor” is a categorical variable with the following orthogonal contrasts: (1) Scales of interest (absorption and the two porosity measures) vs. control scales; (2) absorption vs. porosity measures; (3) porosity as indexed by the Dulin scale vs. porosity as indexed by the Mental Causation scale; (4) Need for Cognition vs. Need for Control (Mastery Subscale). Because of the unusual and complex formulation of this model—considering each of these 5 “predictors” as repeated observations of the variable “score”—we will conduct separate models for the two spiritual experience scales (Daily Spiritual Experiences and Spiritual Events), rather than incorporating both spiritual experiences measures into the same model (as in Hypotheses #1-4). As in Hypotheses #1-4, if we have trouble fitting these models or there are other signs of model fit problems, we will consider the following alternative model: experience ~ score * predictor + (1 | site/subject). We consider these to be confirmatory tests, and in each case our prediction is that the two-way interaction between “score” and the first orthogonal contrast on “predictor” (comparing the predictive power of our scales of interest vs. our two control scales) will be significantly positive (b > 0, t > 2, p < 0.05)."
+
+Although we did not number this hypothesis in the preregistration, I'm going to go ahead and call it Hypothesis #5.
+
+```{r}
+d_std_h5 <- full_join(
+  d_std %>%
+    distinct(p7_ctry, p7_subj, dse, se) %>%
+    gather(scale, experience, c(dse, se)),
+  d_std %>%
+    distinct(p7_ctry, p7_subj, abs, por, mm, hthk, wob) %>%
+    gather(predictor, score, c(abs, por, mm, hthk, wob))) %>%
+  mutate(scale = factor(scale),
+         predictor = factor(predictor))
+
+contrasts(d_std_h5$scale) <- contr.sum(2)
+contrasts(d_std_h5$p7_ctry) <- contr.sum(5)
+contrasts(d_std_h5$predictor) <- cbind(int_ctl = c(2,-3, 2, 2, -3),
+                                       abs_pmm = c(2, 0, -1, -1, 0),
+                                       por_mm = c(0, 0, -1, 1, 0),
+                                       hthk_wob = c(0, 1, 0, 0, -1))
+```
+
+_NOTE: Neither of the models we specified in the preregistration were able to run. I think this is due to an error in my thinking (about which of our measures were "repeated measures"). The models reported here are very close to what we preregistered._
+
+Here are our results using the Daily Spiritual Experiences scale: 
+
+```{r}
+r5_dse <- lm(experience ~ score * predictor * p7_ctry, 
+             d_std_h5 %>% filter(scale == "dse"))
+# summary(r5_dse)
+```
+
+```{r, include = T}
+summary(r5_dse)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(11, bold = T)
+```
+
+<P style="page-break-before: always">
+And here are our results using the Spiritual Events scale: 
+
+```{r}
+r5_se <- lm(experience ~ score * predictor * p7_ctry, 
+             d_std_h5 %>% filter(scale == "se"))
+# summary(r5_se)
+```
+
+```{r, include = T}
+summary(r5_se)$coefficients %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  rename(b = Estimate, `standard error` = Std..Error, `t` = t.value,
+         p = Pr...t..) %>%
+  mutate_at(vars(-parameter, -p), funs(round(., 2))) %>%
+  mutate(p = ifelse(p < 0.001, "<0.001", round(p, 3)),
+         significant = ifelse(p < 0.05, "*", "")) %>%
+  kable(align = c("l", rep("r", 5), "l")) %>%
+  kable_styling() %>%
+  row_spec(11, bold = T)
+```
+
+In both cases, **we found evidence in favor of Hypothesis #5**: As predicted, the interaction between "score" and the first contrast on the "predictor" parameter was significantly positive (see bolded row in tables above), whether indexed spiritual experiences using the DSE or SE scales. In other words, the "predictors of interest" (absorption and the two porosity measures) were better predictors of spiritual experience than our two "control" predictors.
+
+```{r}
+h5_plot_a <- d_std_h5 %>%
+  filter(scale == "dse") %>%
+  mutate(pred_type = case_when(
+    predictor %in% c("abs", "por", "mm") ~ "Hypothesized",
+    predictor %in% c("hthk", "wob") ~ "Control"),
+    pred_type = factor(pred_type, levels = c("Hypothesized", "Control")),
+    predictor = recode_factor(predictor,
+                              "abs" = "Absorption",
+                              "por" = "Porosity",
+                              "mm" = "Martha story",
+                              "hthk" = "Hard thinking",
+                              "wob" = "Ways of being")) %>%
+  ggplot(aes(x = score, y = experience, color = p7_ctry)) +
+  facet_grid(rows = vars(pred_type, predictor), cols = vars(p7_ctry)) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #5: By site and predictor (using DSE scale)",
+       x = "Score on predictor (standardized collapsing across sites)",
+       y = "Daily Spiritual Experiences score (standardized collapsing across sites)")
+```
+
+```{r}
+h5_plot_b <- d_std_h5 %>%
+  filter(scale == "dse") %>%
+  mutate(pred_type = case_when(
+    predictor %in% c("abs", "por", "mm") ~ "Hypothesized",
+    predictor %in% c("hthk", "wob") ~ "Control"),
+    pred_type = factor(pred_type, levels = c("Hypothesized", "Control")),
+    predictor = recode_factor(predictor,
+                              "abs" = "Absorption",
+                              "por" = "Porosity",
+                              "mm" = "Martha story",
+                              "hthk" = "Hard thinking",
+                              "wob" = "Ways of being")) %>%
+  ggplot(aes(x = score, y = experience)) +
+  facet_grid(rows = vars(pred_type)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #5: Overall (using DSE scale)",
+       x = "Score on predictor (standardized collapsing across sites)",
+       y = "Daily Spiritual Experiences score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.6, include = T}
+plot_grid(h5_plot_a, h5_plot_b, rel_widths = c(2, 1))
+```
+
+```{r}
+h5_plot_c <- d_std_h5 %>%
+  filter(scale == "se") %>%
+  mutate(pred_type = case_when(
+    predictor %in% c("abs", "por", "mm") ~ "Hypothesized",
+    predictor %in% c("hthk", "wob") ~ "Control"),
+    pred_type = factor(pred_type, levels = c("Hypothesized", "Control")),
+    predictor = recode_factor(predictor,
+                              "abs" = "Absorption",
+                              "por" = "Porosity",
+                              "mm" = "Martha story",
+                              "hthk" = "Hard thinking",
+                              "wob" = "Ways of being")) %>%
+  ggplot(aes(x = score, y = experience, color = p7_ctry)) +
+  facet_grid(rows = vars(pred_type, predictor), cols = vars(p7_ctry)) +
+  geom_jitter(alpha = 0.5, show.legend = F) +
+  geom_smooth(method = "lm", color = "black", alpha = 0.25, show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #5: By site and predictor (using SE scale)",
+       x = "Score on predictor (standardized collapsing across sites)",
+       y = "Spiritual Events score (standardized collapsing across sites)")
+```
+
+```{r}
+h5_plot_d <- d_std_h5 %>%
+  filter(scale == "se") %>%
+  mutate(pred_type = case_when(
+    predictor %in% c("abs", "por", "mm") ~ "Hypothesized",
+    predictor %in% c("hthk", "wob") ~ "Control"),
+    pred_type = factor(pred_type, levels = c("Hypothesized", "Control")),
+    predictor = recode_factor(predictor,
+                              "abs" = "Absorption",
+                              "por" = "Porosity",
+                              "mm" = "Martha story",
+                              "hthk" = "Hard thinking",
+                              "wob" = "Ways of being")) %>%
+  ggplot(aes(x = score, y = experience)) +
+  facet_grid(rows = vars(pred_type)) +
+  geom_jitter(alpha = 0.25, show.legend = F) +
+  geom_smooth(method = "lm", show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Hypothesis #5: Overall (using SE scale)",
+       x = "Score on predictor (standardized collapsing across sites)",
+       y = "Spiritual Events score (standardized collapsing across sites)")
+```
+
+```{r, fig.width = 6, fig.asp = 0.6, include = T}
+plot_grid(h5_plot_c, h5_plot_d, rel_widths = c(2, 1))
+```
+
+
+<P style="page-break-before: always">
+# Overall scores
+
+```{r}
+# excluding participants who failed any attention check
+d_pass_mb <- d %>% 
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>% 
+  group_by(p7_ctry, scale) %>%
+  multi_boot_standard(col = "score") %>% 
+  ungroup()
+```
+
+```{r}
+# excluding participants who failed any attention check
+scores_plot_pass_a <- d %>% 
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>%
+  ggplot(aes(x = p7_ctry, y = score, color = p7_ctry)) +
+  facet_wrap(~scale, scales = "free") +
+  geom_jitter(height = 0.2, width = 0.4, alpha = 0.2, show.legend = F) +
+  geom_pointrange(data = d_pass_mb,
+                  aes(y = mean, ymin = ci_lower, ymax = ci_upper),
+                  color = "black", fatten = 2) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Scores for all scales",
+       subtitle = "Exluding participants who failed ≥1 of 7 attention checks\nError bars are 95% bootstrapped CIs",
+       x = "Site", y = "Score")
+```
+
+```{r}
+# excluding participants who failed any attention check
+scores_plot_pass_b <- d_pass_mb %>% 
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>%
+  ggplot(aes(x = p7_ctry, y = mean, color = p7_ctry)) +
+  facet_wrap(~scale, scales = "free") +
+  geom_pointrange(aes(ymin = ci_lower, ymax = ci_upper), 
+                  fatten = 2, show.legend = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Scores for all scales (zoomed in)",
+       subtitle = "Exluding participants who failed ≥1 of 7 attention checks\nError bars are 95% bootstrapped CIs",
+       x = "Site", y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 2.2, include = T}
+# excluding participants who failed any attention check
+plot_grid(scores_plot_pass_a, scores_plot_pass_b, ncol = 1)
+```
+
+```{r}
+# including all participants
+d_all_mb <- d0 %>% 
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>% 
+  group_by(p7_ctry, scale) %>%
+  multi_boot_standard(col = "score") %>% 
+  ungroup()
+```
+
+```{r}
+# including all participants
+scores_plot_all_a <- d0 %>% 
+  select(p7_ctry, p7_subj, contains("total")) %>%
+  distinct() %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>%
+  ggplot(aes(x = p7_ctry, y = score, color = p7_ctry)) +
+  facet_wrap(~scale, scales = "free") +
+  geom_jitter(height = 0.2, width = 0.4, alpha = 0.2, show.legend = F) +
+  geom_pointrange(data = d_all_mb,
+                  aes(y = mean, ymin = ci_lower, ymax = ci_upper),
+                  color = "black", fatten = 2) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Scores for all scales",
+       subtitle = "Including all participants, even if they failed attention checks\nError bars are 95% bootstrapped CIs",
+       x = "Site", y = "Score")
+```
+
+```{r}
+# including all participants
+scores_plot_all_b <- d_all_mb %>% 
+  mutate(scale = gsub("p7_", "", scale),
+         scale = gsub("_.*$", "", scale),
+         scale = recode_factor(scale,
+                               "abs" = "Absorption",
+                               "dse" = "Daily spiritual experiences",
+                               "se" = "Spiritual events",
+                               "wob" = "Ways of being",
+                               "unev" = "Uncommon events",
+                               "exsen" = "Extrasensory",
+                               "hthk" = "Hard thinking",
+                               "por" = "Porosity",
+                               "mm" = "Martha story")) %>%
+  ggplot(aes(x = p7_ctry, y = mean, color = p7_ctry)) +
+  facet_wrap(~scale, scales = "free") +
+  geom_pointrange(aes(ymin = ci_lower, ymax = ci_upper), 
+                  fatten = 2, show.legend = F) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Scores for all scales (zoomed in)",
+       subtitle = "Including all participants, even if they failed attention checks\nError bars are 95% bootstrapped CIs",
+       x = "Site", y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 2.2, include = T}
+# including all participants
+plot_grid(scores_plot_all_a, scores_plot_all_b, ncol = 1)
+```
+
+
+<P style="page-break-before: always">
+# Histograms for each scale
+
+## Absorption
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_abs_total) %>%
+  ggplot(aes(x = p7_abs_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_abs_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_abs_total)),
+             aes(x = 17, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 34, 17)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Absorption", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-34)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_abs_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_abs_total) %>%
+  ggplot(aes(x = p7_abs_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_abs_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_abs_total)),
+             aes(x = 17, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 34, 17)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Absorption", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in absorption scale",
+       x = "Total score (0-34)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Daily spiritual experiences
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_dse_total) %>%
+  ggplot(aes(x = p7_dse_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_dse_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_dse_total)),
+             aes(x = 35, y = 0.05, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 70, 35)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Daily spiritual experiences", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-70)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_dse_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_dse_total) %>%
+  ggplot(aes(x = p7_dse_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_dse_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_dse_total)),
+             aes(x = 35, y = 0.05, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 70, 35)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Daily spiritual experiences", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in DSE scale",
+       x = "Total score (0-70)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Spiritual events
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_se_total) %>%
+  ggplot(aes(x = p7_se_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_se_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_se_total)),
+             aes(x = 48, y = 0.05, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 96, 24)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Spiritual events", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-96)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_se_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_se_total) %>%
+  ggplot(aes(x = p7_se_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_se_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_se_total)),
+             aes(x = 48, y = 0.05, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 96, 24)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Spiritual events", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in SE scale",
+       x = "Total score (0-96)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Ways of being
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_wob_total) %>%
+  ggplot(aes(x = p7_wob_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_wob_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_wob_total)),
+             aes(x = 0, y = 0.06, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(-36, 36, 18)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Ways of being", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (-36 to 36)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  distinct(p7_ctry, p7_subj, p7_wob_total) %>%
+  ggplot(aes(x = p7_wob_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_wob_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_wob_total)),
+             aes(x = 0, y = 0.06, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(-36, 36, 18)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Ways of being", 
+       subtitle = "Including all participants (even if they failed attention checks)",
+       x = "Total score (-36 to 36)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Uncommon events
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_unev_total) %>%
+  ggplot(aes(x = p7_unev_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 1, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_unev_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_unev_total)),
+             aes(x = 9, y = 0.20, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 18, 9)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Uncommon events", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-18)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_unev_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_unev_total) %>%
+  ggplot(aes(x = p7_unev_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 1, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_unev_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_unev_total)),
+             aes(x = 9, y = 0.20, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 18, 9)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Uncommon events", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in UNEV scale",
+       x = "Total score (0-18)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Extrasensory
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_exsen_total) %>%
+  ggplot(aes(x = p7_exsen_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 1, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_exsen_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_exsen_total)),
+             aes(x = 3.5, y = 0.30, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 7, 1)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Extrasensory", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-7)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_exsen_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_exsen_total) %>%
+  ggplot(aes(x = p7_exsen_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 1, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_exsen_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_exsen_total)),
+             aes(x = 3.5, y = 0.30, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 7, 1)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Extrasensory", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in EXSEN scale",
+       x = "Total score (0-7)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Hard thinking
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_hthk_total) %>%
+  ggplot(aes(x = p7_hthk_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_hthk_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_hthk_total)),
+             aes(x = 3.5, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(-38, 38, 19)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Hard thinking", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (-38 to 38)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  distinct(p7_ctry, p7_subj, p7_hthk_total) %>%
+  ggplot(aes(x = p7_hthk_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_hthk_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_hthk_total)),
+             aes(x = 3.5, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(-38, 38, 19)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Hard thinking", 
+       subtitle = "Including all participants (even if they failed attention checks)",
+       x = "Total score (-38 to 38)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Porosity
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_por_total) %>%
+  ggplot(aes(x = p7_por_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_por_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_por_total)),
+             aes(x = 17, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 34, 17)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Porosity", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-34)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_por_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_por_total) %>%
+  ggplot(aes(x = p7_por_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 3, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_por_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_por_total)),
+             aes(x = 17, y = 0.08, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 34, 17)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Porosity", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in POR scale",
+       x = "Total score (0-34)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+## Martha story
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d %>%
+  distinct(p7_ctry, p7_subj, p7_mm_total) %>%
+  ggplot(aes(x = p7_mm_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_mm_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_mm_total)),
+             aes(x = 27, y = 0.06, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 54, 27)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Martha story", 
+       subtitle = "Excluding participants who failed ≥1 of 7 attention checks",
+       x = "Total score (0-54)", 
+       y = "Density (proxy for percentage)")
+```
+
+```{r, fig.width = 4, fig.asp = 0.4, include = T}
+d0 %>%
+  filter(p7_mm_check == "pass") %>%
+  distinct(p7_ctry, p7_subj, p7_mm_total) %>%
+  ggplot(aes(x = p7_mm_total, fill = p7_ctry)) +
+  facet_grid(~p7_ctry) +
+  geom_histogram(aes(y = stat(density)), binwidth = 5, show.legend = F) +
+  geom_vline(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_mm_total)),
+             aes(xintercept = median), lty = 2) +
+  geom_label(data = . %>% group_by(p7_ctry) %>%
+               summarise(median = median(p7_mm_total)),
+             aes(x = 27, y = 0.06, 
+                 label = paste0("median: ", round(median, 2))),
+             hjust = 0.5, fill = "white", alpha = 0.5, size = 3) +
+  scale_x_continuous(breaks = seq(0, 54, 27)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Martha story", 
+       subtitle = "Excluding participants who failed 1 out of 1 attention checks embedded in MM scale",
+       x = "Total score (0-54)", 
+       y = "Density (proxy for percentage)")
+```
+
+<P style="page-break-before: always">
+# Demographics
+
+```{r, include = T}
+print("Participants who passed all attention checks")
+d %>%
+  distinct(p7_ctry, p7_subj) %>%
+  count(p7_ctry)
+```
+
+```{r, include = T}
+print("All participants")
+d0 %>%
+  distinct(p7_ctry, p7_subj) %>%
+  count(p7_ctry)
+```
+
+```{r, include = T}
+print("Participants who passed all attention checks")
+d %>%
+  distinct(p7_ctry, p7_subj, p7_dem_sex) %>%
+  group_by(p7_ctry) %>%
+  count(p7_dem_sex) %>%
+  mutate(prop = round(n/sum(n), 2)) %>%
+  ungroup() %>%
+  select(-n) %>%
+  spread(p7_dem_sex, prop)
+```
+
+```{r, include = T}
+print("All participants")
+d0 %>%
+  distinct(p7_ctry, p7_subj, p7_dem_sex) %>%
+  group_by(p7_ctry) %>%
+  count(p7_dem_sex) %>%
+  mutate(prop = round(n/sum(n), 2)) %>%
+  ungroup() %>%
+  select(-n) %>%
+  spread(p7_dem_sex, prop)
+```
+
+Important to note that a _very_ substantial majority of participants in Thailand were female, and a slight majority of participants in Vanuatu were female.
+
+```{r, include = T}
+print("Participants who passed all attention checks")
+d %>%
+  distinct(p7_ctry, p7_subj, p7_dem_age) %>%
+  group_by(p7_ctry) %>%
+  summarise(median = median(p7_dem_age, na.rm = T),
+            mean = mean(p7_dem_age, na.rm = T),
+            sd = sd(p7_dem_age, na.rm = T),
+            min = min(p7_dem_age, na.rm = T),
+            max = max(p7_dem_age, na.rm = T)) %>%
+  mutate_at(vars(median, mean, sd, min, max), funs(round(., 2)))
+```
+
+```{r, include = T}
+print("All participants")
+d0 %>%
+  distinct(p7_ctry, p7_subj, p7_dem_age) %>%
+  group_by(p7_ctry) %>%
+  summarise(median = median(p7_dem_age, na.rm = T),
+            mean = mean(p7_dem_age, na.rm = T),
+            sd = sd(p7_dem_age, na.rm = T),
+            min = min(p7_dem_age, na.rm = T),
+            max = max(p7_dem_age, na.rm = T)) %>%
+  mutate_at(vars(median, mean, sd, min, max), funs(round(., 2)))
+```
