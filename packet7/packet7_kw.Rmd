@@ -2989,6 +2989,125 @@ ggplot(d_exp_bysite_cor %>%
        color = "Predictor")
 ```
 
+<P style="page-break-before: always">
+## Porosity: good vs. bad emotions
+
+```{r}
+d_mm <- d0 %>%
+  select(p7_ctry, p7_subj, contains("_mm_")) %>%
+  select(-c(ends_with("_cat"), contains("total"), contains("check"))) %>%
+  gather(question, response, -c(p7_ctry, p7_subj)) %>%
+  mutate(emo = case_when(grepl("_ang_", question) ~ "anger",
+                         grepl("_car_", question) ~ "caring",
+                         grepl("_env_", question) ~ "envy",
+                         TRUE ~ NA_character_),
+         val = case_when(emo %in% c("anger", "envy") ~ "negative",
+                         emo == "caring" ~ "positive",
+                         TRUE ~ NA_character_),
+         emo = factor(emo, levels = c("anger", "envy", "caring")),
+         val = factor(val, levels = c("negative", "positive")))
+
+contrasts(d_mm$p7_ctry) <- contrasts_ctry_eff
+contrasts(d_mm$emo) <- cbind("_neg_pos" = c(1, 1, -2),
+                             "_env_ang" = c(-1, 1, 0))
+contrasts(d_mm$val) <- cbind("_neg_pos" = c(0, 1))
+```
+
+```{r, fig.width = 4, fig.asp = 0.7, include = T}
+mm_emo_plot_a <- d_mm %>% 
+  filter(!is.na(emo)) %>%
+  group_by(p7_ctry, p7_subj, val, emo) %>%
+  summarise(mean_score = mean(response, na.rm = T),
+            sum_score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  ggplot(aes(x = emo, y = mean_score, color = p7_ctry)) +
+  facet_grid(~ p7_ctry) +
+  geom_jitter(alpha = 0.2) +
+  geom_pointrange(data = . %>% group_by(p7_ctry, val, emo) %>%
+                    multi_boot_standard(col = "mean_score", na.rm = T) %>%
+                    ungroup(),
+                  aes(y = mean, ymin = ci_lower, ymax = ci_upper),
+                  color = "black", fatten = 2, show.legend = F) +
+  scale_color_brewer(palette = "Dark2", guide = "none") +
+  scale_y_continuous(breaks = seq(0, 3, 1)) +
+  labs(title = "Mean responses to Martha Story questions by emotion",
+       subtitle = "Response options: 0 = never, 1 = rarely, 2 = often, 3 = very often\nError bars are bootstrapped 95% confidence intervals",
+       x = "Emotion", 
+       y = "Mean response")
+
+mm_emo_plot_b <- d_mm %>% 
+  filter(!is.na(emo)) %>%
+  group_by(p7_ctry, p7_subj, val, emo) %>%
+  summarise(mean_score = mean(response, na.rm = T),
+            sum_score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  group_by(p7_ctry, val, emo) %>%
+  multi_boot_standard(col = "mean_score", na.rm = T) %>%
+  ungroup() %>%
+  ggplot(aes(x = emo, color = p7_ctry)) +
+  facet_grid(~ p7_ctry) +
+  geom_pointrange(aes(y = mean, ymin = ci_lower, ymax = ci_upper),
+                  fatten = 4, show.legend = F) +
+  scale_color_brewer(palette = "Dark2", guide = "none") +
+  scale_y_continuous(breaks = seq(0, 3, 1)) +
+  labs(title = "(zoomed in)",
+       subtitle = "Response options: 0 = never, 1 = rarely, 2 = often, 3 = very often\nError bars are bootstrapped 95% confidence intervals",
+       x = "Emotion", 
+       y = "Mean response")
+
+plot_grid(mm_emo_plot_a, mm_emo_plot_b, ncol = 1)
+```
+
+```{r, fig.width = 4, fig.asp = 1.2}
+d_mm %>% 
+  filter(!is.na(emo)) %>%
+  group_by(p7_ctry, p7_subj, val, emo, question) %>%
+  summarise(mean_score = mean(response, na.rm = T),
+            sum_score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  left_join(var_key %>% select(question, question_text, order)) %>%
+  mutate(question_text = str_wrap(question_text, 40),
+         question_type = case_when(
+           question %in% c("p7_mm_ang_feel.hurt", "p7_mm_car_fel.no.pr",
+                           "p7_mm_env_feel.hurt") ~ 
+             "a. hurt/help with feelings",
+           question %in% c("p7_mm_ang_thgs.hurt", "p7_mm_car_thk.no.pr",
+                           "p7_mm_env_thgs.hurt") ~ 
+             "b. hurt/help with just thoughts",
+           question %in% c("p7_mm_ang_sprt.hurt", "p7_mm_car_sprt.help",
+                           "p7_mm_env_sprt.hurt") ~ 
+             "c. hurt/help via spirit",
+           question %in% c("p7_mm_ang_physical", "p7_mm_car_physical",
+                           "p7_mm_env_physical") ~ 
+             "d. physically sick/well",
+           question %in% c("p7_mm_ang_sickness", "p7_mm_car_curing",
+                           "p7_mm_env_sickness") ~ 
+             "e. cause")) %>%
+  ggplot(aes(x = emo, 
+             y = mean_score, color = p7_ctry)) +
+  facet_grid(p7_ctry ~ str_wrap(question_type, 20), scales = "free_x") +
+  geom_point(alpha = 0.05,
+             position = position_jitterdodge(jitter.width = 2,
+                                             jitter.height = 0.3,
+                                             dodge.width = 0.5)) +
+  geom_pointrange(data = . %>% 
+                    group_by(p7_ctry, val, emo, 
+                             question_type, question, question_text) %>%
+                    multi_boot_standard(col = "mean_score", na.rm = T) %>%
+                    ungroup(),
+                  aes(y = mean, ymin = ci_lower, ymax = ci_upper),
+                  fatten = 2, color = "black",
+                  position = position_dodge(width = 0.5),
+                  show.legend = F) +
+  scale_color_brewer(palette = "Dark2", guide = "none") +
+  scale_y_continuous(breaks = seq(0, 3, 1)) +
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1)) +
+  labs(title = "Mean responses to Martha Story questions by item",
+       subtitle = "Response options: 0 = never, 1 = rarely, 2 = often, 3 = very often\nError bars are bootstrapped 95% confidence intervals",
+       x = "Question type",
+       y = "Mean response")
+```
+
 
 <P style="page-break-before: always">
 # Overall scores
