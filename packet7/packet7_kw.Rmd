@@ -2010,7 +2010,8 @@ contrasts(d_std_h6$p7_ctry) <- contr.sum(5)
 Here are our results using the Porosity (Dulin) scale: 
 
 ```{r}
-r6_por <- lmer(experience ~ abs * por * scale + (1 | p7_subj), d_std_h6)
+r6_por <- lmer(experience ~ abs * por * p7_ctry * scale 
+               + (1 | p7_subj), d_std_h6)
 # summary(r6_por)
 ```
 
@@ -2025,13 +2026,14 @@ summary(r6_por)$coefficients %>%
          significant = ifelse(p < 0.05, "*", "")) %>%
   kable(align = c("l", rep("r", 5), "l")) %>%
   kable_styling() %>%
-  row_spec(c(2:3, 5), bold = T)
+  row_spec(c(2:3, 9), bold = T)
 ```
 
 And here are our results using the Martha Story scale: 
 
 ```{r}
-r6_mm <- lmer(experience ~ abs * mm * scale + (1 | p7_subj), d_std_h6)
+r6_mm <- lmer(experience ~ abs * mm * p7_ctry * scale + 
+                (1 | p7_subj), d_std_h6)
 # summary(r6_mm)
 ```
 
@@ -2046,7 +2048,7 @@ summary(r6_mm)$coefficients %>%
          significant = ifelse(p < 0.05, "*", "")) %>%
   kable(align = c("l", rep("r", 5), "l")) %>%
   kable_styling() %>%
-  row_spec(c(2:3, 5), bold = T)
+  row_spec(c(2:3, 9), bold = T)
 ```
 
 In both cases, **we see evidence for absorption and porosity being positively related to spiritual experiences even after controlling for each other**: The relationship between absorption and spiritual experience was significantly positive, controlling for porosity; and the effect of porosity (as indexed by either the Dulin scale or the Martha Story scale) and spiritual experience was also significantly positive, controlling for absorption. There was no strong evidence of an interactive effect of absorption and porosity in either case (see bolded rows in tables above).
@@ -2892,8 +2894,6 @@ ggplot(d_exp_cor %>%
 
 ### Considering each site individually
 
-### Collapsing across sites
-
 ```{r}
 d_exp_bysite <- d0 %>% # all participants
   select(p7_ctry, p7_subj, p7_dem_how.sprt.relg,
@@ -2920,19 +2920,19 @@ d_exp_bysite_cor <- d_exp_bysite %>%
   summarise(abs_cor = cor(p7_abs_total, response, 
                           use = "pairwise.complete")) %>%
   full_join(d_exp_bysite %>% 
-              select(p7_subj, p7_por_total, 
+              select(p7_ctry, p7_subj, p7_por_total, 
                      contains("_dse_"), contains("_se_"), 
                      contains("_unev_"), contains("_exsen_")) %>%
-              gather(question, response, -c(p7_subj, p7_por_total)) %>%
-              group_by(question) %>%
+              gather(question, response, -c(p7_ctry, p7_subj, p7_por_total)) %>%
+              group_by(p7_ctry, question) %>%
               summarise(por_cor = cor(p7_por_total, response, 
                                       use = "pairwise.complete"))) %>%
   full_join(d_exp_bysite %>% 
-              select(p7_subj, p7_mm_total, 
+              select(p7_ctry, p7_subj, p7_mm_total, 
                      contains("_dse_"), contains("_se_"), 
                      contains("_unev_"), contains("_exsen_")) %>%
-              gather(question, response, -c(p7_subj, p7_mm_total)) %>%
-              group_by(question) %>%
+              gather(question, response, -c(p7_ctry, p7_subj, p7_mm_total)) %>%
+              group_by(p7_ctry, question) %>%
               summarise(mm_cor = cor(p7_mm_total, response, 
                                      use = "pairwise.complete"))) %>%
   gather(which_cor, cor, ends_with("_cor")) %>%
