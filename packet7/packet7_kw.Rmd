@@ -4157,6 +4157,114 @@ d0 %>%
        y = "Density (proxy for percentage)")
 ```
 
+
+<P style="page-break-before: always">
+# Reliability
+
+```{r}
+alpha_by_ctry_fun <- function(df){
+  
+  df <- df %>% 
+    select(-ends_with("_cat"), -contains("total"), -contains('check'))
+  
+  alpha_fun <- function(df){
+    alpha_df <- psych::alpha(df)
+    raw_alpha <- alpha_df$total[1][] %>% as.numeric()
+    return(raw_alpha)
+  }
+  
+  a <- c(
+    alpha_us = alpha_fun(df %>% 
+                           filter(p7_ctry == "US") %>%
+                           select(-p7_ctry)),
+    alpha_gh = alpha_fun(df %>% filter(p7_ctry == "Ghana") %>%
+                           select(-p7_ctry)),
+    alpha_th = alpha_fun(df %>% filter(p7_ctry == "Thailand") %>%
+                           select(-p7_ctry)),
+    alpha_ch = alpha_fun(df %>% filter(p7_ctry == "China") %>%
+                           select(-p7_ctry)),
+    alpha_vt = alpha_fun(df %>% filter(p7_ctry == "Vanuatu") %>%
+                           select(-p7_ctry)),
+    alpha_all = alpha_fun(df %>% select(-p7_ctry)))
+  
+  return(a)
+}
+```
+
+```{r}
+d_alpha <- data.frame(
+  `Daily Spiritual Experiences` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_dse"))),
+  `Spiritual Events` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_se")) %>% remove_missing()),
+  `Uncommon Events` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_unev"))),
+  `Extrasensory` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_exsen"))),
+  `Absorption` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_abs"))),
+  `Porosity (Dulin)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_por"))),
+  `Martha Story` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_mm"))),
+  `Ways of being` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_wob"))),
+  `Hard thinking` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_hthk"))),
+  `Ways of being (no rev)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_wob"), -contains("reverse"))),
+  `Hard thinking (no rev)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_hthk"), 
+                  -c("p7_hthk_not.fun", "p7_hthk_lil.challeng", 
+                     "p7_hthk_avoid.think", "p7_hthk_hrd.hav.to", 
+                     "p7_hthk_smal.daily", "p7_hthk_lil.thought",
+                     "p7_hthk_not.exciting", "p7_hthk_mental.effrt",
+                     "p7_hthk_job.done")))) %>%
+  rownames_to_column("sample") %>%
+  gather(scale, raw_alpha, -sample) %>%
+  mutate(sample = 
+           recode_factor(gsub("alpha_", "", sample),
+                         "us" = "US",
+                         "gh" = "Ghana",
+                         "th" = "Thailand",
+                         "ch" = "China",
+                         "vt" = "Vanuatu",
+                         "all" = "OVERALL"),
+         scale = gsub("\\.\\.$", ")", scale),
+         scale = gsub("\\.\\.", " (", scale),
+         scale = gsub("\\.$", ")", scale),
+         scale = gsub("\\.", " ", scale),
+         scale = factor(scale,
+                        levels = c("Daily Spiritual Experiences", 
+                                   "Spiritual Events",
+                                   "Uncommon Events", "Extrasensory",
+                                   "Absorption", "Porosity (Dulin)",
+                                   "Martha Story", "Ways of being",
+                                   "Ways of being (no rev)",
+                                   "Hard thinking", "Hard thinking (no rev)")))
+```
+
+```{r, fig.width = 5, fig.asp = 0.5, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall",
+       subtitle = "Cronbach's alpha = 0.8 (black dotted line) is a classic cutoff for 'very good' reliability;\nin practice, alpha < 0.7 (gray dotted line) is often considered problematic",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)")
+```
+
+
 <P style="page-break-before: always">
 # Demographics
 
