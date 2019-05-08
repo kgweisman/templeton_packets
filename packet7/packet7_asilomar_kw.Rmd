@@ -1,0 +1,1488 @@
+---
+title: "Packet 7 (KW addressing questions raised at Asilomar)"
+subtitle: "Last updated: 2019-05-08"
+output:
+  html_notebook:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+always_allow_html: yes
+---
+
+This is Kara's response to an email from Tanya from Asilomar (2019-05-07), post-conference, using Packet 7 data (with data from 2019-03-18). (Note: PDF printed portrait, 80% zoom, minimum margins.)
+
+```{r global_options, include = F}
+knitr::opts_chunk$set(fig.width = 4, fig.asp = 0.67,
+                      include = F, echo = F)
+```
+
+```{r}
+library(tidyverse)
+library(langcog)
+library(psych)
+library(readxl)
+library(cowplot)
+library(lme4)
+library(lmerTest)
+library(kableExtra)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+source("./scripts/p7_data_prep.R")
+```
+
+Questions from TML email:
+
+1. Does DSE 4, 5, 13, 14, 15  [the least spiritual events] hang together with Spiritual Events and does porosity predict it?
+2. Spiritual Events (three groups: 14, 15, 26, then 17, 18, 19, then 20, 21, then all these together)—do these correlate less with porosity than 1-13 from that scale?
+3. Do these items from the Dulin scale (2, 3, 16, 17, the less personified events) correlate differently with spiritual events than the other items considered as a group?
+4. Can we sum Martha Mary 1b, 1e, 2b, 2e, 3b, 3e and see whether these “pure” porosity events still predict spiritual events?
+5. Are there highly religious people (as marked in demographics) who do not endorse porosity highly and the reverse? e.g., can we plot the how spiritual/religious against Martha Mary and also against Dulin? 
+6. Plot highly religious people against the DSE and against the Spiritual Events scale?
+
+I'll try to address each in turn!
+
+
+<P style="page-break-before: always">
+# Question #1: Focusing on the least spiritual experiences from Daily Spiritual Experiences scale
+
+Tanya's question: _Does DSE 4, 5, 13, 14, 15  [the least spiritual events] hang together with Spiritual Events and does porosity predict it?_
+
+```{r}
+d_q1 <- d0 %>%
+  select(p7_ctry, p7_subj, contains("_dse_")) %>%
+  select(-contains("total"), -contains("check"), -ends_with("_cat")) %>%
+  gather(question, response, contains("_dse_")) %>%
+  mutate(dse_part = case_when(
+    question %in% c("p7_dse_spi.strength", "p7_dse_spirt.comfort", # q4-5
+                    "p7_dse_blessings", "p7_dse_selfless.care", # q13-14
+                    "p7_dse_accept.wrong") ~ "p7_dse_total_less", # q15
+    TRUE ~ "p7_dse_total_more")) %>% 
+  group_by(p7_ctry, p7_subj, dse_part) %>%
+  summarise(score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  spread(dse_part, score) %>%
+  left_join(d0 %>% select(p7_subj, contains("total"))) %>%
+  mutate_at(vars(-c(p7_ctry, p7_subj)), funs(as.numeric)) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  group_by(scale) %>%
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  group_by(scale, p7_ctry) %>%
+  mutate(score_std_bysite = scale(score, scale = T)) %>%
+  ungroup()
+```
+
+I'll start by looking at correlations between the subset of "less spiritual" DSE items, the Spiritual Events total score, and the Porosity (Dulin) total score. I'll also include the relevant correlations with the "more spiritual" DSE items and the DSE total score as points of reference.
+
+```{r, fig.width = 4, fig.asp = 0.8, include = T}
+# correlations without standardizing:
+cor_q1 <- d_q1 %>%
+  filter(grepl("_dse_", scale) | grepl("_se_", scale) | 
+           grepl("_por_", scale)) %>%
+  select(p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  column_to_rownames("p7_subj") %>%
+  cor.ci(plot = F)
+
+cor_q1$rho %>%
+  data.frame() %>%
+  rownames_to_column("v1") %>%
+  gather(v2, r, -v1) %>%
+  mutate_at(vars(v1, v2),
+            funs(recode_factor(
+              .,
+              "p7_se_total" = "Spiritual events",
+              "p7_dse_total" = "DSE (all items)",
+              "p7_dse_total_more" = "DSE (more spiritual items)",
+              "p7_dse_total_less" = "DSE (less spiritual items)",
+              "p7_por_total" = "Porosity (Dulin)"))) %>%
+  ggplot(aes(x = v1, y = v2, fill = r, 
+             label = format(round(r, 2), nsmall = 2))) +
+  geom_tile(color = "black") +
+  geom_text() +
+  annotate("rect", xmin = 2.5, xmax = 4.5, ymin = 0.5, ymax = 1.5,
+           alpha = 0, color = "black", size = 1) +
+  annotate("rect", xmin = 2.5, xmax = 4.5, ymin = 4.5, ymax = 5.5,
+           alpha = 0, color = "black", size = 1) +
+  scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Correlations among subsets of the Daily Spiritual Experiences (DSE) scale,\nthe Spiritual Events scale, and the Porosity (Dulin) scale",
+       subtitle = "No standardization",
+       fill = "Pearson's r")
+```
+
+```{r, fig.width = 4, fig.asp = 0.8, include = F}
+# # correlations after standardizing within each site
+# cor_q1_std_bysite <- d_q1 %>%
+#   filter(grepl("_dse_", scale) | grepl("_se_", scale) |
+#            grepl("_por_", scale)) %>%
+#   select(p7_subj, scale, score_std_bysite) %>%
+#   spread(scale, score_std_bysite) %>%
+#   column_to_rownames("p7_subj") %>%
+#   cor.ci(plot = F)
+# 
+# cor_q1_std_bysite$rho %>%
+#   data.frame() %>%
+#   rownames_to_column("v1") %>%
+#   gather(v2, r, -v1) %>%
+#   mutate_at(vars(v1, v2),
+#             funs(recode_factor(
+#               .,
+#               "p7_se_total" = "Spiritual events",
+#               "p7_dse_total" = "DSE (all items)",
+#               "p7_dse_total_more" = "DSE (more spiritual items)",
+#               "p7_dse_total_less" = "DSE (less spiritual items)",
+#               "p7_por_total" = "Porosity (Dulin)"))) %>%
+#   ggplot(aes(x = v1, y = v2, fill = r, 
+#              label = format(round(r, 2), nsmall = 2))) +
+#   geom_tile(color = "black") +
+#   geom_text() +
+#   annotate("rect", xmin = 2.5, xmax = 4.5, ymin = 0.5, ymax = 1.5,
+#            alpha = 0, color = "black", size = 1) +
+#   annotate("rect", xmin = 2.5, xmax = 4.5, ymin = 4.5, ymax = 5.5,
+#            alpha = 0, color = "black", size = 1) +
+#   scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+#                        guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+#   theme(axis.title = element_blank(),
+#         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+#   labs(title = "Correlations among subsets of the Daily Spiritual Experiences (DSE) scale\nthe Spiritual Events scale, and the Porosity (Dulin) scale",
+#        subtitle = "After standardizing within each site",
+#        fill = "Pearson's r")
+```
+
+__Correlations with Spiritual Events__:
+
+- The subset of less spiritual DSE items was strongly correlated with the Spiritual Events total score (r = `r round(cor_q1$rho["p7_dse_total_less", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q1$ci["p7_ds_ttl_l-p7_s_", "low.e"], 2)`, `r round(cor_q1$ci["p7_ds_ttl_l-p7_s_", "up.e"], 2)`], p = `r round(cor_q1$ci["p7_ds_ttl_l-p7_s_", "p"], 2)`). 
+- Numerically speaking, this correlation appears to be somewhat weaker than the correlation between the subset of more spiritual DSE items and Spiritual Events (r = `r round(cor_q1$rho["p7_dse_total_more", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q1$ci["p7_ds_ttl_m-p7_s_", "low.e"], 2)`, `r round(cor_q1$ci["p7_ds_ttl_m-p7_s_", "up.e"], 2)`], p = `r round(cor_q1$ci["p7_ds_ttl_m-p7_s_", "p"], 2)`).
+
+__Correlations with Porosity__:
+
+- The subset of less spiritual DSE items was strongly correlated with the Porosity (Dulin) total score (r = `r round(cor_q1$rho["p7_dse_total_less", "p7_por_total"], 2)`, 95% CI: [`r round(cor_q1$ci["p7_ds_ttl_l-p7_p_", "low.e"], 2)`, `r round(cor_q1$ci["p7_ds_ttl_l-p7_p_", "up.e"], 2)`], p = `r round(cor_q1$ci["p7_ds_ttl_l-p7_p_", "p"], 2)`). 
+- Numerically speaking, this correlation appears to be somewhat weaker than the correlation between the subset of more spiritual DSE items and Porosity (Dulin) (r = `r round(cor_q1$rho["p7_dse_total_more", "p7_por_total"], 2)`, 95% CI: [`r round(cor_q1$ci["p7_ds_ttl_m-p7_p_", "low.e"], 2)`, `r round(cor_q1$ci["p7_ds_ttl_m-p7_p_", "up.e"], 2)`], p = `r round(cor_q1$ci["p7_ds_ttl_m-p7_p_", "p"], 2)`).
+
+```{r}
+# correlations without standardizing:
+cor_q1_bysite <- d_q1 %>%
+  filter(grepl("_dse_", scale) | grepl("_se_", scale) |
+           grepl("_por_", scale)) %>%
+  select(p7_ctry, p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  group_by(p7_ctry) %>%
+  summarise(
+    dse_total.se_total = cor(p7_dse_total, p7_se_total),
+    dse_total_more.se_total = cor(p7_dse_total_more, p7_se_total),
+    dse_total_less.se_total = cor(p7_dse_total_less, p7_se_total),
+    dse_total.por_total = cor(p7_dse_total, p7_por_total),
+    dse_total_more.por_total = cor(p7_dse_total_more, p7_por_total),
+    dse_total_less.por_total = cor(p7_dse_total_less, p7_por_total)) %>%
+  full_join(d_q1 %>%
+              filter(grepl("_dse_", scale) | grepl("_se_", scale) |
+                       grepl("_por_", scale)) %>%
+              select(p7_subj, scale, score) %>%
+              mutate(p7_ctry = "OVERALL") %>%
+              group_by(p7_ctry) %>%
+              spread(scale, score) %>%
+              summarise(
+                dse_total.se_total = cor(p7_dse_total, p7_se_total),
+                dse_total_more.se_total = cor(p7_dse_total_more, p7_se_total),
+                dse_total_less.se_total = cor(p7_dse_total_less, p7_se_total),
+                dse_total.por_total = cor(p7_dse_total, p7_por_total),
+                dse_total_more.por_total = cor(p7_dse_total_more, p7_por_total),
+                dse_total_less.por_total = cor(p7_dse_total_less,  
+                                               p7_por_total))) %>%
+  gather(pair, r, -p7_ctry) %>%
+  separate(pair, into = c("v1", "v2"), sep = "\\.") %>%
+  mutate(p7_ctry = factor(p7_ctry,
+                          levels = c("US", "Ghana", "Thailand", "China",
+                                     "Vanuatu", "OVERALL"))) %>%
+  rename(sample = p7_ctry)
+```
+
+However, are these _meaningful_ differences? One important thing to keep in mind is that the reliability of a scale (how strongly its items are correlated with each other) affects how strongly correlated the total scale can be with other measures. A rough rule of thumb is that the reliability of a scale sets an upper bound for the correlation between that scale and others. Since these two subsets of DSE are kind of ad-hoc (and definitely post-hoc) breakdowns of a pre-existing scale, this seems especially important to check here.
+
+With this in mind, let's check the reliability of the two subsets of the DSE scale, and look at how these correlations with Spiritual Events and Porosity (Dulin) stack up to the upper limit imposed by reliability... and just for fun I'll throw in the correlations within each site as well.
+
+```{r}
+alpha_by_ctry_fun <- function(df){
+  
+  df <- df %>% 
+    select(-ends_with("_cat"), -contains("total"), -contains('check'))
+  
+  alpha_fun <- function(df){
+    alpha_df <- psych::alpha(df)
+    raw_alpha <- alpha_df$total[1][] %>% as.numeric()
+    return(raw_alpha)
+  }
+  
+  a <- c(
+    alpha_us = alpha_fun(df %>% 
+                           filter(p7_ctry == "US") %>%
+                           select(-p7_ctry)),
+    alpha_gh = alpha_fun(df %>% filter(p7_ctry == "Ghana") %>%
+                           select(-p7_ctry)),
+    alpha_th = alpha_fun(df %>% filter(p7_ctry == "Thailand") %>%
+                           select(-p7_ctry)),
+    alpha_ch = alpha_fun(df %>% filter(p7_ctry == "China") %>%
+                           select(-p7_ctry)),
+    alpha_vt = alpha_fun(df %>% filter(p7_ctry == "Vanuatu") %>%
+                           select(-p7_ctry)),
+    alpha_all = alpha_fun(df %>% select(-p7_ctry)))
+  
+  return(a)
+}
+```
+
+```{r}
+d_alpha <- data.frame(
+  # `Spiritual Events` = alpha_by_ctry_fun(
+  #   d0 %>% select(p7_ctry, contains("_se_")) %>% remove_missing()),
+  `DSE (all items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_dse_"))),
+  `DSE (more spiritual items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_dse_")) %>%
+      select(-c(p7_dse_spi.strength, p7_dse_spirt.comfort, # q4-5
+                p7_dse_blessings, p7_dse_selfless.care, # q13-14
+                p7_dse_accept.wrong))), #q15
+  `DSE (less spiritual items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, 
+                  p7_dse_spi.strength, p7_dse_spirt.comfort, # q4-5
+                  p7_dse_blessings, p7_dse_selfless.care, # q13-14
+                  p7_dse_accept.wrong))) %>%
+  rownames_to_column("sample") %>%
+  gather(scale, raw_alpha, -sample) %>%
+  mutate(sample = 
+           recode_factor(gsub("alpha_", "", sample),
+                         "us" = "US",
+                         "gh" = "Ghana",
+                         "th" = "Thailand",
+                         "ch" = "China",
+                         "vt" = "Vanuatu",
+                         "all" = "OVERALL"),
+         scale = gsub("\\.\\.$", ")", scale),
+         scale = gsub("\\.\\.", " (", scale),
+         scale = gsub("\\.$", ")", scale),
+         scale = gsub("\\.", " ", scale),
+         scale = factor(scale,
+                        levels = c(#"Spiritual Events",
+                                   "DSE (all items)", 
+                                   "DSE (more spiritual items)", 
+                                   "DSE (less spiritual items)")))
+```
+
+```{r, fig.width = 5, fig.asp = 0.4, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  # geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  geom_point(data = cor_q1_bysite %>%
+               filter(v1 != "por_total", v2 != "por_total") %>%
+               mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+               rename(scale = v1) %>%
+               mutate(scale = recode(
+                 scale,
+                 "dse_total" = "DSE (all items)",
+                 "dse_total_less" = "DSE (less spiritual items)",
+                 "dse_total_more" = "DSE (more spiritual items)")),
+             aes(y = r), shape = 9,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall, and correlations with Spiritual Events scale",
+       subtitle = "Solid dots are reliability (Cronbach's alpha) for each scale/subscale (alpha = 0.8 is a classic cutoff for 'good' reliability)\nCross-hatches are correlations with Spiritual Events, which in theory are capped at the reliability of the two scales involved",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)\nOR Pearson's r (range: -1 to +1)")
+```
+
+```{r, fig.width = 5, fig.asp = 0.4, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  # geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  geom_point(data = cor_q1_bysite %>%
+               filter(v1 != "se_total", v2 != "se_total") %>%
+               mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+               rename(scale = v1) %>%
+               mutate(scale = recode(
+                 scale,
+                 "dse_total" = "DSE (all items)",
+                 "dse_total_less" = "DSE (less spiritual items)",
+                 "dse_total_more" = "DSE (more spiritual items)")),
+             aes(y = r), shape = 9,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall, and correlations with Porosity (Dulin) scale",
+       subtitle = "Solid dots are reliability (Cronbach's alpha) for each scale/subscale (alpha = 0.8 is a classic cutoff for 'good' reliability)\nCross-hatches are correlations with Porosity (Dulin), which in theory are capped at the reliability of the two scales involved",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)\nOR Pearson's r (range: -1 to +1)")
+```
+
+The solid dots in these plots illustrate that the subset of less spiritual DSE items (center panel) formed a generally less reliable "scale" than the subset of more spiritual DSE items (rightmost). This has the important consequence of forcing the correlation between the less spiritual items and the Spiritual Events scale in some sense to be weaker. 
+
+Given this, what I'm interested in is whether the distance between the cross-hatch (the correlation coefficient between that scale and Spiritual Events, in the first plot; or between that scale and Porosity (Dulin), in the second plot) and the solid dot (the reliability of that scale) differs across the panels. If this distance were greater for the subset of less spirtiual DSE items, this would strengthen my belief that these items were meaningfully less strongly related to Spiritual Events/Porosity - but that's not really what I see here in either case. Instead, if you think of reliability as an upper limit for correlation, the differences between correlations starts to look like an artifact of differences in reliability.
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: Both less spiritual and more spiritual DSE items were strongly correlated with Spiritual Events, and with Porosity. These relationships were somewhat weaker for the less spiritual DSE items, but I'm not sure these differences were meaningful—they might well be an artifact of underlying differences in reliability across the two subsets of DSE items.</span>
+
+
+<P style="page-break-before: always">
+# Question #2: Focusing on different sets of spiritual events from the Spiritual Events scale
+
+Tanya's question: _Spiritual Events (three groups: 14, 15, 26, then 17, 18, 19, then 20, 21, then all these together)—do these correlate less with porosity than 1-13 from that scale?_
+
+NOTES: 
+
+- In Packet 7, the Spiritual Events scale only included 23 items (no question #26), and I suspect you might have meant 16 instead, so I went with this for now. - I also want to point out that this grouping (1-13 vs. 14-21) leaves out questions 22-23.
+- Given my concerns about reliability, I'm going to start with the coarsest grouping - comparing a 3-item "scale" with a 13-item scale could really obscure what's going on here. We can come back to this and discuss more!
+
+```{r}
+d_q2 <- d0 %>%
+  select(p7_ctry, p7_subj, contains("_se_")) %>%
+  select(-contains("total"), -contains("check"), -ends_with("_cat")) %>%
+  gather(question, response, contains("_se_")) %>%
+  mutate(se_part = case_when(
+    question %in% c("p7_se_shaking.prayer", "p7_se_emotion.prayer", # q14-15
+                    "p7_se_powrful.prayer", "p7_se_out.body.exp", #q16-17
+                    "p7_se_body.control", "p7_se_slep.paralysis", #q18-19 
+                    "p7_se_god.thru.pain", "p7_se_god.illness") ~ #q20-21
+      "p7_se_total_q14to21",
+    TRUE ~ "p7_se_total_q1to13")) %>% 
+  group_by(p7_ctry, p7_subj, se_part) %>%
+  summarise(score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  spread(se_part, score) %>%
+  left_join(d0 %>% select(p7_subj, contains("total"))) %>%
+  mutate_at(vars(-c(p7_ctry, p7_subj)), funs(as.numeric)) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  group_by(scale) %>%
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  group_by(scale, p7_ctry) %>%
+  mutate(score_std_bysite = scale(score, scale = T)) %>%
+  ungroup()
+```
+
+I'll start by looking at correlations between SE items #14-21, SE items #1-13 and the Porosity (Dulin) total score. I'll also include the relevant correlations with the SE total score as a point of reference.
+
+```{r, fig.width = 4, fig.asp = 0.8, include = T}
+# correlations without standardizing:
+cor_q2 <- d_q2 %>%
+  filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+  select(p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  column_to_rownames("p7_subj") %>%
+  cor.ci(plot = F)
+
+cor_q2$rho %>%
+  data.frame() %>%
+  rownames_to_column("v1") %>%
+  gather(v2, r, -v1) %>%
+  mutate_at(vars(v1, v2),
+            funs(recode_factor(
+              .,
+              "p7_se_total" = "SE (all items)",
+              "p7_se_total_q1to13" = "SE (items #1-13)",
+              "p7_se_total_q14to21" = "SE (items #14-21)",
+              "p7_por_total" = "Porosity (Dulin)"))) %>%
+  ggplot(aes(x = v1, y = v2, fill = r, 
+             label = format(round(r, 2), nsmall = 2))) +
+  geom_tile(color = "black") +
+  geom_text() +
+  annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+           alpha = 0, color = "black", size = 1) +
+  scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Correlations among subsets of the Spiritual Events (SE) scale,\nand the Porosity (Dulin) scale",
+       subtitle = "No standardization",
+       fill = "Pearson's r")
+```
+
+```{r, fig.width = 4, fig.asp = 0.8, include = F}
+# # correlations after standardizing within each site
+# cor_q2_std_bysite <- d_q2 %>%
+#   filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+#   select(p7_subj, scale, score_std_bysite) %>%
+#   spread(scale, score_std_bysite) %>%
+#   column_to_rownames("p7_subj") %>%
+#   cor.ci(plot = F)
+# 
+# cor_q2_std_bysite$rho %>%
+#   data.frame() %>%
+#   rownames_to_column("v1") %>%
+#   gather(v2, r, -v1) %>%
+#   mutate_at(vars(v1, v2),
+#             funs(recode_factor(
+#               .,
+#               "p7_se_total" = "SE (all items)",
+#               "p7_se_total_q1to13" = "SE (items #1-13)",
+#               "p7_se_total_q14to21" = "SE (items #14-21)",
+#               "p7_por_total" = "Porosity (Dulin)"))) %>%
+#   ggplot(aes(x = v1, y = v2, fill = r, 
+#              label = format(round(r, 2), nsmall = 2))) +
+#   geom_tile(color = "black") +
+#   geom_text() +
+#   annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+#            alpha = 0, color = "black", size = 1) +
+#   scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+#                        guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+#   theme(axis.title = element_blank(),
+#         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+#   labs(title = "Correlations among subsets of the Spiritual Events (SE) scale,\nand the Porosity (Dulin) scale",
+#        subtitle = "After standardizing within each site",
+#        fill = "Pearson's r")
+```
+
+__Correlations with Porosity__:
+
+- The highlighted subset of SE items (#14-21) was strongly correlated with the Porosity (Dulin) total score (r = `r round(cor_q2$rho["p7_se_total_q14to21", "p7_por_total"], 2)`, 95% CI: [`r round(cor_q2$ci["p7_p_-p7___14", "low.e"], 2)`, `r round(cor_q2$ci["p7_p_-p7___14", "up.e"], 2)`], p = `r round(cor_q2$ci["p7_p_-p7___14", "p"], 2)`). 
+- Numerically speaking, this correlation appears to be somewhat weaker than the correlation between the other subset of SE items (#1-13) and Porosity (Dulin) (r = `r round(cor_q2$rho["p7_se_total_q1to13", "p7_por_total"], 2)`, 95% CI: [`r round(cor_q2$ci["p7_p_-p7___11", "low.e"], 2)`, `r round(cor_q2$ci["p7_p_-p7___11", "up.e"], 2)`], p = `r round(cor_q2$ci["p7_p_-p7___11", "p"], 2)`).
+
+```{r}
+# correlations without standardizing:
+cor_q2_bysite <- d_q2 %>%
+  filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+  select(p7_ctry, p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  group_by(p7_ctry) %>%
+  summarise(
+    se_total.por_total = cor(p7_se_total, p7_por_total),
+    se_total_q1to13.por_total = cor(p7_se_total_q1to13, p7_por_total),
+    se_total_q14to21.por_total = cor(p7_se_total_q14to21, p7_por_total)) %>%
+  full_join(d_q2 %>%
+              filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+              select(p7_subj, scale, score) %>%
+              mutate(p7_ctry = "OVERALL") %>%
+              group_by(p7_ctry) %>%
+              spread(scale, score) %>%
+              summarise(
+                se_total.por_total = cor(p7_se_total, p7_por_total),
+                se_total_q1to13.por_total = cor(p7_se_total_q1to13, 
+                                                p7_por_total),
+                se_total_q14to21.por_total = cor(p7_se_total_q14to21,  
+                                               p7_por_total))) %>%
+  gather(pair, r, -p7_ctry) %>%
+  separate(pair, into = c("v1", "v2"), sep = "\\.") %>%
+  mutate(p7_ctry = factor(p7_ctry,
+                          levels = c("US", "Ghana", "Thailand", "China",
+                                     "Vanuatu", "OVERALL"))) %>%
+  rename(sample = p7_ctry)
+```
+
+However, is this a _meaningful_ difference? To repeat from Question #1, above: an important thing to keep in mind is that the reliability of a scale (how strongly its items are correlated with each other) affects how strongly correlated the total scale can be with other measures. A rough rule of thumb is that the reliability of a scale sets an upper bound for the correlation between that scale and others. Since these two subsets of SE are kind of ad-hoc (and definitely post-hoc) breakdowns of a pre-existing scale, this seems especially important to check here.
+
+With this in mind, let's check the reliability of the two subsets of the SE scale, and look at how these correlations with Porosity (Dulin) stack up to the upper limit imposed by reliability... and just for fun I'll throw in the correlations within each site as well.
+
+```{r}
+d_alpha <- data.frame(
+  `SE (all items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_se_")) %>% remove_missing()),
+  `SE (#1-13)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_se_")) %>% remove_missing() %>%
+      select(-c(p7_se_shaking.prayer, p7_se_emotion.prayer, # q14-15
+                p7_se_powrful.prayer, p7_se_out.body.exp, #q16-17
+                p7_se_body.control, p7_se_slep.paralysis, #q18-19 
+                p7_se_god.thru.pain, p7_se_god.illness))), #q20-21
+  `SE (#14-21)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, 
+                  p7_se_shaking.prayer, p7_se_emotion.prayer, # q14-15
+                p7_se_powrful.prayer, p7_se_out.body.exp, #q16-17
+                p7_se_body.control, p7_se_slep.paralysis, #q18-19 
+                p7_se_god.thru.pain, p7_se_god.illness))) %>% #q20-21
+  rownames_to_column("sample") %>%
+  gather(scale, raw_alpha, -sample) %>%
+  mutate(sample = 
+           recode_factor(gsub("alpha_", "", sample),
+                         "us" = "US",
+                         "gh" = "Ghana",
+                         "th" = "Thailand",
+                         "ch" = "China",
+                         "vt" = "Vanuatu",
+                         "all" = "OVERALL"),
+         scale = gsub("\\.\\.$", ")", scale),
+         scale = gsub("\\.\\.", " (", scale),
+         scale = gsub("\\.$", ")", scale),
+         scale = gsub("\\.", " ", scale),
+         scale = gsub("\\( ", "\\(\\#", scale),
+         scale = gsub("1 13", "1-13", scale),
+         scale = gsub("14 21", "14-21", scale)) %>%
+  mutate(scale = factor(scale,
+                        levels = c("SE (all items)", 
+                                   "SE (#1-13)", 
+                                   "SE (#14-21)")))
+```
+
+```{r, fig.width = 5, fig.asp = 0.4, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  # geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  geom_point(data = cor_q2_bysite %>%
+               mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+               rename(scale = v1) %>%
+               mutate(scale = recode_factor(
+                 scale,
+                 "se_total" = "SE (all items)",
+                 "se_total_q14to21" = "SE (#14-21)",
+                 "se_total_q1to13" = "SE (#1-13)")),
+             aes(y = r), shape = 9,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(-0.1, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall, and correlations with Porosity (Dulin) scale",
+       subtitle = "Solid dots are reliability (Cronbach's alpha) for each scale/subscale (alpha = 0.8 is a classic cutoff for 'good' reliability)\nCross-hatches are correlations with Spiritual Events, which in theory are capped at the reliability of the two scales involved",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)\nOR Pearson's r (range: -1 to +1)")
+```
+
+The solid dots in these plots illustrate that SE items #14-21 (rightmost panel) formed a generally less reliable "scale" than SE items #1-13 (center)—not surprising, since shorter scales are generally less reliable. This has the important consequence of forcing the correlation between items #14-21 and the Porosity (Dulin) scale in some sense to be weaker. 
+
+Given this, what I'm interested in is whether the distance between the cross-hatch (the correlation coefficient between that scale and Porosity (Dulin)) and the solid dot (the reliability of that scale) differs across the panels. If this distance were greater for SE items #14-21, this would strengthen my belief that these items were meaningfully less strongly related to Porosity - but that's not really what I see here. Instead, if you think of reliability as an upper limit for correlation, the differences between correlations starts to look like an artifact of differences in reliability.
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: Both subsets of SE items were strongly correlated with Porosity. These relationships were slightly weaker for SE items #14-21, but I'm not sure these differences were meaningful—they might well be an artifact of underlying differences in reliability across the two subsets of SE items.</span>
+
+
+<P style="page-break-before: always">
+# Question #3: Focusing on the less personified events from the Porosity (Dulin) scale
+
+Tanya's question: _Do these items from the Dulin scale (2, 3, 16, 17, the less personified events) correlate differently with spiritual events than the other items considered as a group?_
+
+```{r}
+d_q3 <- d0 %>%
+  select(p7_ctry, p7_subj, contains("_por_")) %>%
+  select(-contains("total"), -contains("check"), -ends_with("_cat"),
+         -ends_with("_a"), -ends_with("_b"), -ends_with("_c")) %>%
+  gather(question, response, contains("_por_")) %>%
+  mutate(por_part = case_when(
+    question %in% c("p7_por_wifi.thgs", "p7_por_job.wish", # q3-3
+                    "p7_por_thgs.heal", "p7_por_visualization") ~ #q16-17
+      "p7_por_total_lessper",
+    TRUE ~ "p7_por_total_moreper")) %>% 
+  group_by(p7_ctry, p7_subj, por_part) %>%
+  summarise(score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  spread(por_part, score) %>%
+  left_join(d0 %>% select(p7_subj, contains("total"))) %>%
+  mutate_at(vars(-c(p7_ctry, p7_subj)), funs(as.numeric)) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  group_by(scale) %>%
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  group_by(scale, p7_ctry) %>%
+  mutate(score_std_bysite = scale(score, scale = T)) %>%
+  ungroup()
+```
+
+I'll start by looking at correlations between the less personified Porosity items, the more personified Porosity items and the Spiritual Events total score. I'll also include the relevant correlations with the Porosity total score as a point of reference.
+
+```{r, fig.width = 4, fig.asp = 0.8, include = T}
+# correlations without standardizing:
+cor_q3 <- d_q3 %>%
+  filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+  select(p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  column_to_rownames("p7_subj") %>%
+  cor.ci(plot = F)
+
+cor_q3$rho %>%
+  data.frame() %>%
+  rownames_to_column("v1") %>%
+  gather(v2, r, -v1) %>%
+  mutate_at(vars(v1, v2),
+            funs(recode_factor(
+              .,
+              "p7_por_total" = "Porosity (all items)",
+              "p7_por_total_moreper" = "Porosity (more personified)",
+              "p7_por_total_lessper" = "Porosity (less personified)",
+              "p7_se_total" = "Spiritual Events"))) %>%
+  ggplot(aes(x = v1, y = v2, fill = r, 
+             label = format(round(r, 2), nsmall = 2))) +
+  geom_tile(color = "black") +
+  geom_text() +
+  annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+           alpha = 0, color = "black", size = 1) +
+  scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Correlations among subsets of the Porosity (Dulin) scale,\nand the Spiritual Events scale",
+       subtitle = "No standardization",
+       fill = "Pearson's r")
+```
+
+```{r, fig.width = 4, fig.asp = 0.8, include = F}
+# # correlations after standardizing within each site
+# cor_q3_std_bysite <- d_q3 %>%
+#   filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+#   group_by(p7_ctry, scale) %>%
+#   mutate(score = scale(score, scale = T)) %>%
+#   ungroup() %>%
+#   select(p7_subj, scale, score) %>%
+#   spread(scale, score) %>%
+#   column_to_rownames("p7_subj") %>%
+#   cor.ci(plot = F)
+# 
+# cor_q3_std_bysite$rho %>%
+#   data.frame() %>%
+#   rownames_to_column("v1") %>%
+#   gather(v2, r, -v1) %>%
+#   mutate_at(vars(v1, v2),
+#             funs(recode_factor(
+#               .,
+#               "p7_por_total" = "Porosity (all items)",
+#               "p7_por_total_moreper" = "Porosity (more personified)",
+#               "p7_por_total_lessper" = "Porosity (less personified)",
+#               "p7_se_total" = "Spiritual Events"))) %>%
+#   ggplot(aes(x = v1, y = v2, fill = r, 
+#              label = format(round(r, 2), nsmall = 2))) +
+#   geom_tile(color = "black") +
+#   geom_text() +
+#   annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+#            alpha = 0, color = "black", size = 1) +
+#   scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+#                        guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+#   theme(axis.title = element_blank(),
+#         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+#   labs(title = "Correlations among subsets of the Porosity (Dulin) scale,\nand the Spiritual Events scale",
+#        subtitle = "After standardizing within each site",
+#        fill = "Pearson's r")
+```
+
+__Correlations with Spiritual Events_:
+
+- The less personified subest of Porosity items was moderately correlated with the Spiritual Events total score (r = `r round(cor_q3$rho["p7_por_total_lessper", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q3$ci["p7_pr_ttl_l-p7_s_", "low.e"], 2)`, `r round(cor_q3$ci["p7_pr_ttl_l-p7_s_", "up.e"], 2)`], p = `r round(cor_q3$ci["p7_pr_ttl_l-p7_s_", "p"], 2)`). 
+- Numerically speaking, this correlation appears to be weaker than the correlation between the other subset of SE items (#1-13) and Porosity (Dulin) (r = `r round(cor_q3$rho["p7_por_total_moreper", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q3$ci["p7_pr_ttl_m-p7_s_", "low.e"], 2)`, `r round(cor_q3$ci["p7_pr_ttl_m-p7_s_", "up.e"], 2)`], p = `r round(cor_q3$ci["p7_pr_ttl_m-p7_s_", "p"], 2)`).
+
+```{r}
+# correlations without standardizing:
+cor_q3_bysite <- d_q3 %>%
+  filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+  select(p7_ctry, p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  group_by(p7_ctry) %>%
+  summarise(
+    por_total.se_total = cor(p7_por_total, p7_se_total),
+    por_total_moreper.se_total = cor(p7_por_total_moreper, p7_se_total),
+    por_total_lessper.se_total = cor(p7_por_total_lessper, p7_se_total)) %>%
+  full_join(d_q3 %>%
+              filter(grepl("_se_", scale) | grepl("_por_", scale)) %>%
+              select(p7_subj, scale, score) %>%
+              mutate(p7_ctry = "OVERALL") %>%
+              group_by(p7_ctry) %>%
+              spread(scale, score) %>%
+              summarise(
+                por_total.se_total = cor(p7_por_total, p7_se_total),
+                por_total_moreper.se_total = cor(p7_por_total_moreper, 
+                                                 p7_se_total),
+                por_total_lessper.se_total = cor(p7_por_total_lessper, 
+                                                 p7_se_total))) %>%
+  gather(pair, r, -p7_ctry) %>%
+  separate(pair, into = c("v1", "v2"), sep = "\\.") %>%
+  mutate(p7_ctry = factor(p7_ctry,
+                          levels = c("US", "Ghana", "Thailand", "China",
+                                     "Vanuatu", "OVERALL"))) %>%
+  rename(sample = p7_ctry)
+```
+
+However, is this a _meaningful_ difference? To repeat from Questions #1-2, above: an important thing to keep in mind is that the reliability of a scale (how strongly its items are correlated with each other) affects how strongly correlated the total scale can be with other measures. A rough rule of thumb is that the reliability of a scale sets an upper bound for the correlation between that scale and others. Since these two subsets of Porosity are kind of ad-hoc (and definitely post-hoc) breakdowns of a pre-existing scale, this seems especially important to check here.
+
+With this in mind, let's check the reliability of the two subsets of the Porosity scale, and look at how these correlations with Spiritual Events stack up to the upper limit imposed by reliability... and just for fun I'll throw in the correlations within each site as well.
+
+```{r}
+d_alpha <- data.frame(
+  `Porosity (all items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_por_"))),
+  `Porosity (more personified)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_por_")) %>%
+      select(-c(p7_por_wifi.thgs, p7_por_job.wish, # q3-3
+                p7_por_thgs.heal, p7_por_visualization))), #q16-17
+  `Porosity (less personified)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, 
+                  p7_por_wifi.thgs, p7_por_job.wish, # q3-3
+                  p7_por_thgs.heal, p7_por_visualization))) %>% #q16-17
+  rownames_to_column("sample") %>%
+  gather(scale, raw_alpha, -sample) %>%
+  mutate(sample = 
+           recode_factor(gsub("alpha_", "", sample),
+                         "us" = "US",
+                         "gh" = "Ghana",
+                         "th" = "Thailand",
+                         "ch" = "China",
+                         "vt" = "Vanuatu",
+                         "all" = "OVERALL"),
+         scale = gsub("\\.\\.$", ")", scale),
+         scale = gsub("\\.\\.", " (", scale),
+         scale = gsub("\\.$", ")", scale),
+         scale = gsub("\\.", " ", scale),
+         scale = gsub("\\( ", "\\(\\#", scale),
+         scale = gsub("1 13", "1-13", scale),
+         scale = gsub("14 21", "14-21", scale)) %>%
+  mutate(scale = factor(scale,
+                        levels = c("Porosity (all items)", 
+                                   "Porosity (more personified)", 
+                                   "Porosity (less personified)")))
+```
+
+```{r, fig.width = 5, fig.asp = 0.4, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  # geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  geom_point(data = cor_q3_bysite %>%
+               mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+               rename(scale = v1) %>%
+               mutate(scale = recode_factor(
+                 scale,
+                 "por_total" = "Porosity (all items)",
+                 "por_total_moreper" = "Porosity (more personified)",
+                 "por_total_lessper" = "Porosity (less personified)")),
+             aes(y = r), shape = 9,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(-0.1, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall, and correlations with Spiritual Events scale",
+       subtitle = "Solid dots are reliability (Cronbach's alpha) for each scale/subscale (alpha = 0.8 is a classic cutoff for 'good' reliability)\nCross-hatches are correlations with Spiritual Events, which in theory are capped at the reliability of the two scales involved",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)\nOR Pearson's r (range: -1 to +1)")
+```
+
+The solid dots in these plots illustrate that the less personified Porosity items (rightmost panel) formed a generally much less reliable "scale" than the more personified Porosity items (center)—not surprising, since shorter scales are generally less reliable. This has the important consequence of forcing the correlation between the less personified items and the Spiritual Events scale in some sense to be weaker. 
+
+Given this, what I'm interested in is whether the distance between the cross-hatch (the correlation coefficient between that scale and Spirtual Events) and the solid dot (the reliability of that scale) differs across the panels. If this distance were greater for the less personified Porosity items, this would strengthen my belief that these items were meaningfully less strongly related to Spiritual Events - but that's not really what I see here. Instead, if you think of reliability as an upper limit for correlation, the differences between correlations starts to look like an artifact of differences in reliability. (If anything, the reverse might be true - these items might be closer to the ceiling for correlation?)
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: Both subsets of Porosity items were correlated with Spiritual Events. These relationships were weaker for the less personified Porosity items, but I'm not sure these differences were meaningful—they might well be an artifact of underlying differences in reliability across the two subsets of Porosity items.</span>
+
+
+<P style="page-break-before: always">
+# Question #4: Focusing on the purest porosity events from the Martha Story scale
+
+Tanya's question: _Can we sum Martha Mary 1b, 1e, 2b, 2e, 3b, 3e and see whether these “pure” porosity events still predict spiritual events?_
+
+BOOKMARK
+
+```{r}
+d_q4 <- d0 %>%
+  select(p7_ctry, p7_subj, contains("_mm_")) %>%
+  select(-contains("total"), -contains("check"), -ends_with("_cat"),
+         -ends_with("_a"), -ends_with("_b"), -ends_with("_c")) %>%
+  gather(question, response, contains("_mm_")) %>%
+  mutate(por_part = case_when(
+    question %in% c("p7_mm_ang_thgs.hurt", "p7_mm_ang_sickness", # q1b, 1e
+                    "p7_mm_car_thk.no.pr", "p7_mm_car_curing", #q2b, 2e
+                    "p7_mm_env_thgs.hurt", "p7_mm_env_sickness") ~ #q3b, 3e
+      "p7_mm_total_pure",
+    TRUE ~ "p7_mm_total_other")) %>% 
+  group_by(p7_ctry, p7_subj, por_part) %>%
+  summarise(score = sum(response, na.rm = T)) %>%
+  ungroup() %>%
+  spread(por_part, score) %>%
+  left_join(d0 %>% select(p7_subj, contains("total"))) %>%
+  mutate_at(vars(-c(p7_ctry, p7_subj)), funs(as.numeric)) %>%
+  gather(scale, score, -c(p7_ctry, p7_subj)) %>%
+  group_by(scale) %>%
+  mutate(score_std = scale(score, scale = T)) %>%
+  ungroup() %>%
+  group_by(scale, p7_ctry) %>%
+  mutate(score_std_bysite = scale(score, scale = T)) %>%
+  ungroup()
+```
+
+I'll start by looking at correlations between the pure Martha Story items, the other Martha Story items and the Spiritual Events total score. I'll also include the relevant correlations with the Martha Story total score as a point of reference.
+
+```{r, fig.width = 4, fig.asp = 0.8, include = T}
+# correlations without standardizing:
+cor_q4 <- d_q4 %>%
+  filter(grepl("_se_", scale) | grepl("_mm_", scale)) %>%
+  select(p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  column_to_rownames("p7_subj") %>%
+  cor.ci(plot = F)
+
+cor_q4$rho %>%
+  data.frame() %>%
+  rownames_to_column("v1") %>%
+  gather(v2, r, -v1) %>%
+  mutate_at(vars(v1, v2),
+            funs(recode_factor(
+              .,
+              "p7_mm_total" = "Martha Story (all items)",
+              "p7_mm_total_other" = "Martha Story (other)",
+              "p7_mm_total_pure" = "Martha Story (pure)",
+              "p7_se_total" = "Spiritual Events"))) %>%
+  ggplot(aes(x = v1, y = v2, fill = r, 
+             label = format(round(r, 2), nsmall = 2))) +
+  geom_tile(color = "black") +
+  geom_text() +
+  annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+           alpha = 0, color = "black", size = 1) +
+  scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Correlations among subsets of the Martha Story scale,\nand the Spiritual Events scale",
+       subtitle = "No standardization",
+       fill = "Pearson's r")
+```
+
+```{r, fig.width = 4, fig.asp = 0.8, include = F}
+# # correlations after standardizing within each site
+# cor_q4_std_bysite <- d_q4 %>%
+#   filter(grepl("_se_", scale) | grepl("_mm_", scale)) %>%
+#   group_by(p7_ctry, scale) %>%
+#   mutate(score = scale(score, scale = T)) %>%
+#   ungroup() %>%
+#   select(p7_subj, scale, score) %>%
+#   spread(scale, score) %>%
+#   column_to_rownames("p7_subj") %>%
+#   cor.ci(plot = F)
+# 
+# cor_q4_std_bysite$rho %>%
+#   data.frame() %>%
+#   rownames_to_column("v1") %>%
+#   gather(v2, r, -v1) %>%
+#   mutate_at(vars(v1, v2),
+#             funs(recode_factor(
+#               .,
+#               "p7_mm_total" = "Martha Story (all items)",
+#               "p7_mm_total_other" = "Martha Story (other)",
+#               "p7_mm_total_pure" = "Martha Story (pure)",
+#               "p7_se_total" = "Spiritual Events"))) %>%
+#   ggplot(aes(x = v1, y = v2, fill = r,
+#              label = format(round(r, 2), nsmall = 2))) +
+#   geom_tile(color = "black") +
+#   geom_text() +
+#   annotate("rect", xmin = 1.5, xmax = 3.5, ymin = 3.5, ymax = 4.5,
+#            alpha = 0, color = "black", size = 1) +
+#   scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+#                        guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+#   theme(axis.title = element_blank(),
+#         axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+#   labs(title = "Correlations among subsets of the Martha Story scale,\nand the Spiritual Events scale",
+#        subtitle = "After standardizing within each site",
+#        fill = "Pearson's r")
+```
+
+__Correlations with Spiritual Events_:
+
+- The pure subest of Martha Story items was moderately correlated with the Spiritual Events total score (r = `r round(cor_q4$rho["p7_mm_total_pure", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q4$ci["p7_pr_ttl_l-p7_s_", "low.e"], 2)`, `r round(cor_q4$ci["p7_pr_ttl_l-p7_s_", "up.e"], 2)`], p = `r round(cor_q4$ci["p7_pr_ttl_l-p7_s_", "p"], 2)`). 
+- Numerically speaking, this correlation appears to be identical to the correlation between the other subset of SE items (#1-13) and Martha Story (r = `r round(cor_q4$rho["p7_mm_total_other", "p7_se_total"], 2)`, 95% CI: [`r round(cor_q4$ci["p7_pr_ttl_m-p7_s_", "low.e"], 2)`, `r round(cor_q4$ci["p7_pr_ttl_m-p7_s_", "up.e"], 2)`], p = `r round(cor_q4$ci["p7_pr_ttl_m-p7_s_", "p"], 2)`).
+
+```{r}
+# correlations without standardizing:
+cor_q4_bysite <- d_q4 %>%
+  filter(grepl("_se_", scale) | grepl("_mm_", scale)) %>%
+  select(p7_ctry, p7_subj, scale, score) %>%
+  spread(scale, score) %>%
+  group_by(p7_ctry) %>%
+  summarise(
+    por_total.se_total = cor(p7_mm_total, p7_se_total),
+    por_total_other.se_total = cor(p7_mm_total_other, p7_se_total),
+    por_total_pure.se_total = cor(p7_mm_total_pure, p7_se_total)) %>%
+  full_join(d_q4 %>%
+              filter(grepl("_se_", scale) | grepl("_mm_", scale)) %>%
+              select(p7_subj, scale, score) %>%
+              mutate(p7_ctry = "OVERALL") %>%
+              group_by(p7_ctry) %>%
+              spread(scale, score) %>%
+              summarise(
+                por_total.se_total = cor(p7_mm_total, p7_se_total),
+                por_total_other.se_total = cor(p7_mm_total_other, 
+                                                 p7_se_total),
+                por_total_pure.se_total = cor(p7_mm_total_pure, 
+                                                 p7_se_total))) %>%
+  gather(pair, r, -p7_ctry) %>%
+  separate(pair, into = c("v1", "v2"), sep = "\\.") %>%
+  mutate(p7_ctry = factor(p7_ctry,
+                          levels = c("US", "Ghana", "Thailand", "China",
+                                     "Vanuatu", "OVERALL"))) %>%
+  rename(sample = p7_ctry)
+```
+
+However, is this a _meaningful_ similarity? To repeat from Questions #1-2, above: an important thing to keep in mind is that the reliability of a scale (how strongly its items are correlated with each other) affects how strongly correlated the total scale can be with other measures. A rough rule of thumb is that the reliability of a scale sets an upper bound for the correlation between that scale and others. Since these two subsets of Martha Story are kind of ad-hoc (and definitely post-hoc) breakdowns of a pre-existing scale, this seems especially important to check here.
+
+With this in mind, let's check the reliability of the two subsets of the Martha Story scale, and look at how these correlations with Spiritual Events stack up to the upper limit imposed by reliability... and just for fun I'll throw in the correlations within each site as well.
+
+```{r}
+d_alpha <- data.frame(
+  `Martha Story (all items)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_mm_"))),
+  `Martha Story (other)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, contains("_mm_")) %>%
+      select(-c(p7_mm_ang_thgs.hurt, p7_mm_ang_sickness, # q1b, 1e
+                p7_mm_car_thk.no.pr, p7_mm_car_curing, # q2b, 2e
+                p7_mm_env_thgs.hurt, p7_mm_env_sickness))), # q3b, 3e
+  `Martha Story (pure)` = alpha_by_ctry_fun(
+    d0 %>% select(p7_ctry, 
+                  p7_mm_ang_thgs.hurt, p7_mm_ang_sickness, # q1b, 1e
+                  p7_mm_car_thk.no.pr, p7_mm_car_curing, # q2b, 2e
+                  p7_mm_env_thgs.hurt, p7_mm_env_sickness))) %>% # q3b, 3e
+  rownames_to_column("sample") %>%
+  gather(scale, raw_alpha, -sample) %>%
+  mutate(sample = 
+           recode_factor(gsub("alpha_", "", sample),
+                         "us" = "US",
+                         "gh" = "Ghana",
+                         "th" = "Thailand",
+                         "ch" = "China",
+                         "vt" = "Vanuatu",
+                         "all" = "OVERALL"),
+         scale = gsub("\\.\\.$", ")", scale),
+         scale = gsub("\\.\\.", " (", scale),
+         scale = gsub("\\.$", ")", scale),
+         scale = gsub("\\.", " ", scale),
+         scale = gsub("\\( ", "\\(\\#", scale),
+         scale = gsub("1 13", "1-13", scale),
+         scale = gsub("14 21", "14-21", scale)) %>%
+  mutate(scale = factor(scale,
+                        levels = c("Martha Story (all items)", 
+                                   "Martha Story (other)", 
+                                   "Martha Story (pure)")))
+```
+
+```{r, fig.width = 5, fig.asp = 0.4, include = T}
+d_alpha %>%
+  mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+  ggplot(aes(x = sample, y = raw_alpha,  color = sample, 
+             shape = scope, size = scope)) +
+  facet_wrap(~ scale, ncol = 6) +
+  geom_hline(yintercept = 0.8, lty = 2) +
+  # geom_hline(yintercept = 0.7, lty = 2, color = "gray") +
+  geom_point(show.legend = F) +
+  geom_point(data = cor_q4_bysite %>%
+               mutate(scope = ifelse(sample == "OVERALL", "site", "overall")) %>%
+               rename(scale = v1) %>%
+               mutate(scale = recode_factor(
+                 scale,
+                 "por_total" = "Martha Story (all items)",
+                 "por_total_other" = "Martha Story (other)",
+                 "por_total_pure" = "Martha Story (pure)")),
+             aes(y = r), shape = 9,show.legequestind = F) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_size_manual(values = c(2, 4)) +
+  scale_shape_manual(values = c(16, 18)) +
+  scale_y_continuous(limits = c(-0.1, 1)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Reliability by site and overall, and correlations with Spiritual Events scale",
+       subtitle = "Solid dots are reliability (Cronbach's alpha) for each scale/subscale (alpha = 0.8 is a classic cutoff for 'good' reliability)\nCross-hatches are correlations with Spiritual Events, which in theory are capped at the reliability of the two scales involved",
+       x = "Site", y = "Cronbach's alpha (range: 0-1)\nOR Pearson's r (range: -1 to +1)")
+```
+
+The solid dots in these plots illustrate that the pure Martha Story items (rightmost panel) and the other Martha Story items (center) formed roughly equally reliable "scales." Thus, in principle, correlations with Spiritual Events could be equally strong for the two subsets of Martha Story items.
+
+In this light, I feel pretty confidence saying that the "pure" Martha Story items were just as good at "predicting" Spiritual Events as were the other Martha Story items.
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: Both subsets of Martha Story items were equally correlated with Spiritual Events.</span>
+
+
+<P style="page-break-before: always">
+# Question #5: Focusing religiosity & porosity
+
+Tanya's question: _Are there highly religious people (as marked in demographics) who do not endorse porosity highly and the reverse? e.g., can we plot the how spiritual/religious against Martha Mary and also against Dulin?_
+
+To address this, I'll plot self-reported religiosity against scores on both porosity measures.
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  gather(por_scale, score, contains("total")) %>%
+  mutate(por_scale = recode_factor(por_scale,
+                                   "p7_por_total" = "Porosity (Dulin)",
+                                   "p7_mm_total" = "Martha Story")) %>%
+  filter(por_scale == "Porosity (Dulin)") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5) +
+  annotate("rect", xmin = -Inf, xmax = -1.5, ymin = 24, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1.5, xmax = Inf, ymin = -Inf, ymax = 8,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. Porosity (Dulin) scores",
+       subtitle = "No standardization",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  gather(por_scale, score, contains("total")) %>%
+  mutate(por_scale = recode_factor(por_scale,
+                                   "p7_por_total" = "Porosity (Dulin)",
+                                   "p7_mm_total" = "Martha Story")) %>%
+  filter(por_scale != "Porosity (Dulin)") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5) +
+  annotate("rect", xmin = -Inf, xmax = -1.5, ymin = 40.5, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1.5, xmax = Inf, ymin = -Inf, ymax = 13.5,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. Martha Story scores",
+       subtitle = "No standardization",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+We're looking for two things here:
+
+1. Participants who scored high on religiosity but low on porosity (i.e., points in the lower right corner). 
+2. People who scored low on religiosity but high on porosity (i.e., points in the upper left corner). 
+
+I've boxed off the regions that would contain (1) participants who scored 2 on  religiosity and <= 25% of the total possible score for porosity, and (2) participants who scored -2 for religiosity and >= 75% of the total posible score for porosity. There are very few participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 2 & p7_por_total <= 8),
+         hRlMM = (p7_dem_how.sprt.relg >= 2 & p7_mm_total <= 13.5),
+         lRhP = (p7_dem_how.sprt.relg <= -2 & p7_por_total >= 24),
+         lRhMM = (p7_dem_how.sprt.relg <= -2 & p7_mm_total >= 40.5)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low Porosity (Dulin)` = hRlP,
+         `High religiosity, low Martha Story` = hRlMM,
+         `Low religiosity, high Porosity (Dulin)` = lRhP,
+         `Low religiosity, high Martha Story` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and porosity scores. 'High' corresponds to scores >= 25% of the total possible score; 'low' corresponds to scores <= 25% of the total possible score.") %>%
+  kable_styling()
+```
+
+Rather than setting arbitrary cutoffs of +/-2 on religiosity and <=25% or >=75% of the total possible score for porosity, we could also look at "outliers" who scored a certain amount away from the mean on these measures. I'll do this through standardization - first, collapsing across sites; then, within each site individually.
+
+```{r, fig.width = 4, fig.asp = 0.5, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_por_total, p7_mm_total),
+            funs(scale(., scale = T))) %>%
+  gather(por_scale, score, contains("total")) %>%
+  mutate(por_scale = recode_factor(por_scale,
+                                   "p7_por_total" = "Porosity (Dulin)",
+                                   "p7_mm_total" = "Martha Story")) %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_grid(por_scale ~ p7_ctry) +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.2, height = 0,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. porosity scores",
+       subtitle = "After standardizing (collapsing across sites)",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score on porosity measure")
+```
+
+Parallel to above, I've boxed off the regions that would contain (1) participants who scored >= 1 standard deviation above the mean for religiosity and <= 1 standard deviation below the mean for porosity, and (2) participants who scored <= 1 standard deviation below the mean for religiosity and >= 1 standard deviation above the mean for porosity. There are very few participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_por_total, p7_mm_total),
+            funs(scale(., scale = T))) %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 1 & p7_por_total <= -1),
+         hRlMM = (p7_dem_how.sprt.relg >= 1 & p7_mm_total <= -1),
+         lRhP = (p7_dem_how.sprt.relg <= -1 & p7_por_total >= 1),
+         lRhMM = (p7_dem_how.sprt.relg <= -1 & p7_mm_total >= 1)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low Porosity (Dulin)` = hRlP,
+         `High religiosity, low Martha Story` = hRlMM,
+         `Low religiosity, high Porosity (Dulin)` = lRhP,
+         `Low religiosity, high Martha Story` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and porosity scores (standardizing collapsing across sites). 'High' corresponds to scores >=1 standard deviation above the mean (collapsing across sites); 'low' corresponds to scores <= 1 standard deviation below the mean (collapsing across sites).") %>%
+  kable_styling()
+```
+
+What if we standardize _within_ each site, such that we're looking for participants who scored _relatively_ higher/lower compared to other people in that site?
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_por_total, p7_mm_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  gather(por_scale, score, contains("total")) %>%
+  mutate(por_scale = recode_factor(por_scale,
+                                   "p7_por_total" = "Porosity (Dulin)",
+                                   "p7_mm_total" = "Martha Story")) %>%
+  filter(por_scale == "Porosity (Dulin)") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5, scales = "free") +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. Porosity (Dulin) scores",
+       subtitle = "After standardizing within each site",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 0.3}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_por_total, p7_mm_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  gather(por_scale, score, contains("total")) %>%
+  mutate(por_scale = recode_factor(por_scale,
+                                   "p7_por_total" = "Porosity (Dulin)",
+                                   "p7_mm_total" = "Martha Story")) %>%
+  filter(por_scale != "Porosity (Dulin)") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5, scales = "free") +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. Martha Story scores",
+       subtitle = "After standardizing within each site",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+Parallel to the previous plot, I've boxed off the regions that would contain (1) participants who scored >= 1 standard deviation above the mean _for that site_ for religiosity and <= 1 standard deviation below the mean _for that site_ for porosity, and (2) participants who scored <= 1 standard deviation below the mean _for that site_ for religiosity and >= 1 standard deviation above the mean _for that site_ for porosity. There are very few participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_por_total, p7_mm_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_por_total, p7_mm_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 1 & p7_por_total <= -1),
+         hRlMM = (p7_dem_how.sprt.relg >= 1 & p7_mm_total <= -1),
+         lRhP = (p7_dem_how.sprt.relg <= -1 & p7_por_total >= 1),
+         lRhMM = (p7_dem_how.sprt.relg <= -1 & p7_mm_total >= 1)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low Porosity (Dulin)` = hRlP,
+         `High religiosity, low Martha Story` = hRlMM,
+         `Low religiosity, high Porosity (Dulin)` = lRhP,
+         `Low religiosity, high Martha Story` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and porosity scores (standardizing within each site). 'High' corresponds to scores >=1 standard deviation above the mean (for that site); 'low' corresponds to scores <= 1 standard deviation below the mean (for that site).") %>%
+  kable_styling()
+```
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: No matter how we look at it, there were just a handful of people (<2% in any site) who bucked the general trend that endorsements of porosity are positively related to self-reported religiosity.</span>
+
+
+<P style="page-break-before: always">
+# Question #6: Focusing on highly religious people & spiritual experience
+
+Tanya's question: _Plot highly religious people against the DSE and against the Spiritual Events scale?_
+
+NOTE: I'm assuming that this means to do something similar to Question #5, but I'm not sure if that was the intention.
+
+To address this, I'll plot self-reported religiosity against scores on both spiritual experience measures.
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  gather(spex_scale, score, contains("total")) %>%
+  mutate(spex_scale = recode_factor(spex_scale,
+                                   "p7_dse_total" = "DSE",
+                                   "p7_se_total" = "SE")) %>%
+  filter(spex_scale == "DSE") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5) +
+  annotate("rect", xmin = -Inf, xmax = -1.5, ymin = 52.5, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1.5, xmax = Inf, ymin = -Inf, ymax = 17.5,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. DSE scores",
+       subtitle = "No standardization",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  gather(spex_scale, score, contains("total")) %>%
+  mutate(spex_scale = recode_factor(spex_scale,
+                                   "p7_dse_total" = "DSE",
+                                   "p7_se_total" = "SE")) %>%
+  filter(spex_scale != "DSE") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5) +
+  annotate("rect", xmin = -Inf, xmax = -1.5, ymin = 72, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1.5, xmax = Inf, ymin = -Inf, ymax = 24,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. SE scores",
+       subtitle = "No standardization",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+We're looking for two things here:
+
+1. Participants who scored high on religiosity but low on spiritual experience (i.e., points in the lower right corner). 
+2. People who scored low on religiosity but high on spiritual experience (i.e., points in the upper left corner). 
+
+I've boxed off the regions that would contain (1) participants who scored 2 on  religiosity and <= 25% of the total possible score for spiritual experience, and (2) participants who scored -2 for religiosity and >= 75% of the total posible score for spiritual experience. There are very few participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 2 & p7_dse_total <= 17.5),
+         hRlMM = (p7_dem_how.sprt.relg >= 2 & p7_se_total <= 24),
+         lRhP = (p7_dem_how.sprt.relg <= -2 & p7_dse_total >= 52.5),
+         lRhMM = (p7_dem_how.sprt.relg <= -2 & p7_se_total >= 72)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low DSE` = hRlP,
+         `High religiosity, low SE` = hRlMM,
+         `Low religiosity, high DSE` = lRhP,
+         `Low religiosity, high SE` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and spiritual experience scores. 'High' corresponds to scores >= 25% of the total possible score; 'low' corresponds to scores <= 25% of the total possible score.") %>%
+  kable_styling()
+```
+
+Rather than setting arbitrary cutoffs of +/-2 on religiosity and <=25% or >=75% of the total possible score for spiritual experience, we could also look at "outliers" who scored a certain amount away from the mean on these measures. I'll do this through standardization - first, collapsing across sites; then, within each site individually.
+
+```{r, fig.width = 4, fig.asp = 0.5, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_dse_total, p7_se_total),
+            funs(scale(., scale = T))) %>%
+  gather(spex_scale, score, contains("total")) %>%
+  mutate(spex_scale = recode_factor(spex_scale,
+                                   "p7_dse_total" = "DSE",
+                                   "p7_se_total" = "SE")) %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_grid(spex_scale ~ p7_ctry) +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.2, height = 0,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. spiritual experience scores",
+       subtitle = "After standardizing (collapsing across sites)",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score on spiritual experience measure")
+```
+
+Parallel to above, I've boxed off the regions that would contain (1) participants who scored >= 1 standard deviation above the mean for religiosity and <= 1 standard deviation below the mean for spiritual experience, and (2) participants who scored <= 1 standard deviation below the mean for religiosity and >= 1 standard deviation above the mean for spiritual experience. There are virtually _no_ participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_dse_total, p7_se_total),
+            funs(scale(., scale = T))) %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 1 & p7_dse_total <= -1),
+         hRlMM = (p7_dem_how.sprt.relg >= 1 & p7_se_total <= -1),
+         lRhP = (p7_dem_how.sprt.relg <= -1 & p7_dse_total >= 1),
+         lRhMM = (p7_dem_how.sprt.relg <= -1 & p7_se_total >= 1)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low DSE` = hRlP,
+         `High religiosity, low SE` = hRlMM,
+         `Low religiosity, high DSE` = lRhP,
+         `Low religiosity, high SE` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and spiritual experience scores (standardizing collapsing across sites). 'High' corresponds to scores >=1 standard deviation above the mean (collapsing across sites); 'low' corresponds to scores <= 1 standard deviation below the mean (collapsing across sites).") %>%
+  kable_styling()
+```
+
+What if we standardize _within_ each site, such that we're looking for participants who scored _relatively_ higher/lower compared to other people in that site?
+
+```{r, fig.width = 4, fig.asp = 0.3, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_dse_total, p7_se_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  gather(spex_scale, score, contains("total")) %>%
+  mutate(spex_scale = recode_factor(spex_scale,
+                                   "p7_dse_total" = "DSE",
+                                   "p7_se_total" = "SE")) %>%
+  filter(spex_scale == "DSE") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5, scales = "free") +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. DSE scores",
+       subtitle = "After standardizing within each site",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+```{r, fig.width = 4, fig.asp = 0.3}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_dse_total, p7_se_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  gather(spex_scale, score, contains("total")) %>%
+  mutate(spex_scale = recode_factor(spex_scale,
+                                   "p7_dse_total" = "DSE",
+                                   "p7_se_total" = "SE")) %>%
+  filter(spex_scale != "DSE") %>%
+  ggplot(aes(x = p7_dem_how.sprt.relg, y = score, color = p7_ctry)) +
+  facet_wrap(~ p7_ctry, ncol = 5, scales = "free") +
+  annotate("rect", xmin = -Inf, xmax = -1, ymin = 1, ymax = Inf,
+           alpha = 0, color = "black", lty = 2) +
+  annotate("rect", xmin = 1, xmax = Inf, ymin = -Inf, ymax = -1,
+           alpha = 0, color = "black", lty = 2) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0.1,show.legend = F) +
+  scale_color_brewer(palette = "Dark2") +
+  labs(title = "Self-reported religiosity vs. SE scores",
+       subtitle = "After standardizing within each site",
+       x = "'I consider myself a religious or spiritual person.'",
+       y = "Score")
+```
+
+Parallel to the previous plot, I've boxed off the regions that would contain (1) participants who scored >= 1 standard deviation above the mean _for that site_ for religiosity and <= 1 standard deviation below the mean _for that site_ for spiritual experience, and (2) participants who scored <= 1 standard deviation below the mean _for that site_ for religiosity and >= 1 standard deviation above the mean _for that site_ for spiritual experience. There are very few participants in these regions in any site.
+
+```{r, include = T}
+d0 %>%
+  select(p7_ctry, p7_subj, p7_dem_how.sprt.relg, p7_dse_total, p7_se_total) %>%
+  group_by(p7_ctry) %>%
+  mutate_at(vars(p7_dem_how.sprt.relg, p7_dse_total, p7_se_total),
+            funs(scale(., scale = T))) %>%
+  ungroup() %>%
+  mutate(hRlP = (p7_dem_how.sprt.relg >= 1 & p7_dse_total <= -1),
+         hRlMM = (p7_dem_how.sprt.relg >= 1 & p7_se_total <= -1),
+         lRhP = (p7_dem_how.sprt.relg <= -1 & p7_dse_total >= 1),
+         lRhMM = (p7_dem_how.sprt.relg <= -1 & p7_se_total >= 1)) %>%
+  select(p7_ctry, p7_subj, hRlP, hRlMM, lRhP, lRhMM) %>%
+  gather(unusual_type, unusual_score, -c(p7_ctry, p7_subj)) %>%
+  count(p7_ctry, unusual_type, unusual_score) %>%
+  complete(unusual_type, unusual_score, fill = list(n = 0)) %>%
+  group_by(p7_ctry) %>%
+  mutate(prop = n/sum(n)) %>%
+  ungroup() %>%
+  filter(unusual_score) %>%
+  mutate(n_prop = paste0(n, " (", round(prop, 3) * 100, "%)")) %>%
+  select(-c(unusual_score, n, prop)) %>%
+  complete(p7_ctry, unusual_type, fill = list(n_prop = "0")) %>%
+  spread(unusual_type, n_prop) %>%
+  select(p7_ctry, hRlP, hRlMM, lRhP, lRhMM) %>%
+  filter(!is.na(p7_ctry)) %>%
+  rename(Site = p7_ctry,
+         `High religiosity, low DSE` = hRlP,
+         `High religiosity, low SE` = hRlMM,
+         `Low religiosity, high DSE` = lRhP,
+         `Low religiosity, high SE` = lRhMM) %>%
+  kable(caption = "Number of participants with unusual combinations of religiosity and spiritual experience scores (standardizing within each site). 'High' corresponds to scores >=1 standard deviation above the mean (for that site); 'low' corresponds to scores <= 1 standard deviation below the mean (for that site).") %>%
+  kable_styling()
+```
+
+<span style="color:blue">KARA'S CURRENT TAKE-AWAY: No matter how we look at it, there were just a handful of people (<3% in any site) who bucked the general trend that endorsements of spiritual experience are positively related to self-reported religiosity.</span>
+
