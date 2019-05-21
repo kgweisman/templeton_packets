@@ -635,7 +635,7 @@ summary(r23)$coefficients[] %>%
 
 ## Maximal models summary
 
-Here's a summary of these patterns of significance:
+Here's a summary of these patterns of significance for the main effects of Absorption, Porosity (Dulin), Martha Story, and religiosity:
 
 ```{r, include = T}
 bind_rows(summary(r15)$coefficients %>%
@@ -720,6 +720,152 @@ This table highlights that in these maximal models (which, recall, included not 
 - **Religiosity was always a significant predictor** of spiritual experience
 - **Absorption was always a significant (or at least "marginally significant") predictor** of spiritual experience
 - **Porostiy (Dulin) and Martha Story were always significant (or at least "marginaly significant") predictors of spirtiual experience when they were treated as the sole index of porosity**, but tended to cancel each other out when they were both included in these models (due, presumably, to how strongly correlated these two indices of porosity were - i.e., multicollinearity).
+
+And here's a summary of potential interactions with religiosity:
+
+```{r, include = T}
+bind_rows(summary(r15)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r17)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Martha Story"),
+          summary(r19)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "both"),
+          summary(r16)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r18)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Martha Story"),
+          summary(r20)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "both"),
+          summary(r21)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Porosity (Dulin)"),
+          summary(r22)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Martha Story"),
+          summary(r23)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "both")) %>%
+  filter(grepl("\\:", parameter), grepl("relig", parameter),
+         !grepl("ctry", parameter)) %>%
+  dplyr::select(outcome, por_index, parameter, Estimate, Pr...t..) %>%
+  mutate(signif = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001",
+                           format(round(Pr...t.., 3), nsmall = 3)),
+         parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         outcome = factor(outcome, levels = c("DSE", "SE", "both")),
+         por_index = factor(por_index, levels = c("Porosity (Dulin)", "Martha Story", 
+                                                  "both"))) %>%
+  rename("porosity index" = "por_index",
+         "standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = "signif") %>%
+  kable(caption = "Possible interactions with religiosity across maximal models.",
+        format = "html", escape = F,
+        digits = 2, align = c("l", "l", "l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+And finally here's a summary of potential interactions between religiosity and field site:
+
+```{r, include = T}
+bind_rows(summary(r15)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r17)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Martha Story"),
+          summary(r19)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "both"),
+          summary(r16)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r18)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Martha Story"),
+          summary(r20)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "both"),
+          summary(r21)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Porosity (Dulin)"),
+          summary(r22)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Martha Story"),
+          summary(r23)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "both")) %>%
+  filter(grepl("\\:", parameter), grepl("relig", parameter),
+         grepl("ctry", parameter)) %>%
+  dplyr::select(outcome, por_index, parameter, Estimate, Pr...t..) %>%
+  mutate(signif = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001",
+                           format(round(Pr...t.., 3), nsmall = 3)),
+         parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         outcome = factor(outcome, levels = c("DSE", "SE", "both")),
+         por_index = factor(por_index, levels = c("Porosity (Dulin)", "Martha Story", 
+                                                  "both"))) %>%
+  rename("porosity index" = "por_index",
+         "standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = "signif") %>%
+  kable(caption = "Possible interactions between religiosity and field site across maximal models.",
+        format = "html", escape = F,
+        digits = 2, align = c("l", "l", "l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
 
 
 # Mediation analyses
