@@ -511,6 +511,103 @@ efa2_loadings_dom %>%
   theme(axis.title = element_blank())
 ```
 
+## Three-factor solution
+
+Just for the hell of it, here's a three-factor solution.
+
+```{r}
+efa3 <- fa(d1, 3, rotate = "varimax")
+```
+
+```{r, fig.width = 4, fig.asp = 3, include = T}
+heatmap_fun(efa3, factor_names = paste0("MR", 1:3))
+```
+
+```{r}
+efa3_loadings <- efa3$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:3)))
+```
+
+```{r}
+efa3_loadings_dom <- efa3_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = T}
+efa3_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Quick interpretations:
+
+- MR1 = porosity + spiritual experience
+- MR2 = absorption (+ secular experience?)
+- MR3 = controls
+
+Focus on **items** that from DSE, SE, Porosity, & MM scales:
+
+```{r, fig.width = 3, fig.asp = 1.8, include = T}
+efa3_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa3_loadings) %>%
+  full_join(efa3_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 3), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 30, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r, fig.width = 3, fig.asp = 3.7, include = F}
+efa3_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa3_loadings) %>%
+  full_join(efa3_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  # filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 3), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 30, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
 ## Four-factor solution
 
 Just for the hell of it, here's a four-factor solution.
@@ -610,6 +707,104 @@ efa4_loadings_dom %>%
 ```
 
 
+# EXTRA SCRAPS (including only DSE, SE, Porosity, & MM items)
+
+```{r}
+d2 <- d1 %>% 
+  select(contains("_por_"), contains("_mm_"), contains("_dse_"), contains("_se_"))
+```
+
+```{r}
+fa.parallel(d2)
+```
+
+```{r}
+efa_subset9 <- fa(d2, 9, rotate = "varimax")
+```
+
+```{r, fig.width = 8, fig.asp = 1}
+heatmap_fun(efa_subset9, factor_names = paste0("MR", 1:9))
+```
+
+```{r}
+efa_subset9_loadings <- efa_subset9$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:9)))
+```
+
+```{r}
+efa_subset9_loadings_dom <- efa_subset9_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = F}
+efa_subset9_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+```{r, fig.width = 4, fig.asp = 1.8, include = F}
+efa_subset9_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa_subset9_loadings) %>%
+  full_join(efa_subset9_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 3), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 30, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r}
+VSS(d2)
+```
+
+```{r}
+efa_subset7 <- fa(d2, 7, "varimax")
+```
+
+```{r, fig.width = 6, fig.asp = 1}
+heatmap_fun(efa_subset7, factor_names = paste0("MR", 1:7))
+```
+
+```{r}
+reten_fun(d2, "none")
+```
+
+```{r}
+efa_subset3 <- fa(d2, 3, "varimax")
+```
+
+```{r, fig.width = 4, fig.asp = 1.2}
+heatmap_fun(efa_subset3, factor_names = paste0("MR", 1:3))
+```
+
+```{r, fig.width = 3, fig.asp = 1.5}
+heatmap_fun(fa(d2, 2, "varimax"), factor_names = paste0("MR", 1:2))
+```
 
 ```{r, fig.width = 3, fig.asp = 4}
 # EXTRA
