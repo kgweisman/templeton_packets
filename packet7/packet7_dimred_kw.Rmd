@@ -1,0 +1,627 @@
+---
+title: "Packet 7 dimensionality reduction"
+date: "2019-05-19"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+```{r global_options, include = F}
+knitr::opts_chunk$set(fig.width = 4, fig.asp = 0.67,
+                      include = F, echo = F)
+```
+
+```{r}
+library(tidyverse)
+library(langcog)
+library(psych)
+library(readxl)
+library(cowplot)
+library(lme4)
+library(lmerTest)
+library(kableExtra)
+library(lubridate)
+library(ggdendro)
+
+theme_set(theme_bw())
+```
+
+```{r}
+heatmap_fun <- function(efa, factor_names = NA){
+  
+  # get factor names
+  if(is.na(factor_names)){
+    factor_names <- paste("Factor", 1:efa$factors)
+  }
+  
+  # put factors in a standard order when applicable
+  body_factors <- factor_names[grepl("BODY", factor_names)]
+  
+  leftovers <- factor_names[!factor_names %in% body_factors]
+  heart_factors <- leftovers[grepl("HEART", leftovers)]
+  
+  leftovers <- leftovers[!leftovers %in% heart_factors]
+  mind_factors <- leftovers[grepl("MIND", leftovers)]
+  
+  other_factors <- leftovers[!leftovers %in% mind_factors]
+  
+  factor_levels <- c(body_factors, heart_factors, mind_factors, other_factors)
+  
+  # get factor loadings
+  loadings <- efa$loadings[] %>%
+    data.frame() %>%
+    rownames_to_column("capacity") %>%
+    gather(factor, loading, -capacity) %>%
+    mutate(factor = as.character(factor(factor, labels = factor_names)),
+           factor = factor(factor, levels = factor_levels))
+  
+  # get fa.sort() order
+  order <- loadings %>%
+    group_by(capacity) %>%
+    top_n(1, abs(loading)) %>%
+    ungroup() %>%
+    arrange(desc(factor), abs(loading)) %>%
+    mutate(order = 1:length(levels(factor(loadings$capacity)))) %>%
+    select(capacity, order)
+  
+  # get percent shared variance explained
+  shared_var <- efa$Vaccounted %>%
+    data.frame() %>%
+    rownames_to_column("stat") %>%
+    filter(stat == "Proportion Explained") %>%
+    select(-stat) %>%
+    gather(factor, var) %>%
+    mutate(factor = as.character(factor(factor, labels = factor_names)),
+           factor = factor(factor, levels = factor_levels)) %>%
+    mutate(var_shared = paste0(factor, "\n", round(var, 2)*100, "% shared var.,"))
+  
+  # get percent total variance explained
+  total_var <- efa$Vaccounted %>%
+    data.frame() %>%
+    rownames_to_column("stat") %>%
+    filter(stat == "Proportion Var") %>%
+    select(-stat) %>%
+    gather(factor, var) %>%
+    mutate(factor = as.character(factor(factor, labels = factor_names)),
+           factor = factor(factor, levels = factor_levels)) %>%
+    mutate(var_total = paste0(round(var, 2)*100, "% total var."))
+  
+  # make plot
+  plot <- ggplot(loadings %>% 
+                   left_join(order) %>%
+                   left_join(shared_var %>% select(-var)) %>%
+                   left_join(total_var %>% select(-var)) %>%
+                   mutate(capacity = gsub("_", " ", capacity),
+                          factor = factor(factor, levels = factor_levels),
+                          xlab = paste(var_shared, var_total, sep = "\n")),
+                 aes(x = reorder(xlab, as.numeric(factor)), 
+                     y = reorder(capacity, order), 
+                     fill = loading, 
+                     label = format(round(loading, 2), nsmall = 2))) +
+    geom_tile(color = "black") +
+    geom_text(size = 3) +
+    scale_fill_distiller(limits = c(-1, 1), 
+                         palette = "RdYlBu",
+                         guide = guide_colorbar(barheight = 10)) +
+    theme_minimal() +
+    scale_x_discrete(position = "top") +
+    theme(axis.title = element_blank())
+  
+  return(plot)
+  
+}
+
+s_moments <- function(p) {p*(p+1)/2}
+param_est <- function(p, k) {p*k + p - (k*(k-1)/2)}
+check_ok <- function(p, k) {
+  a <- (p-k)^2
+  b <- p+k
+  return(ifelse(a>b, TRUE, FALSE))
+}
+max_ok <- function(p) {
+  df_check <- data.frame()
+  for(i in 1:p){
+    df_check[i,"check"] <- check_ok(p,i)
+  }
+  max <- df_check %>% filter(check) %>% nrow()
+  return(max)
+}
+reten_fun <- function(df, rot_type = c("oblimin", "varimax", "none")){
+  
+  # figure out max number of factors to retain
+  n_var <- length(names(df))
+  max_k <- max_ok(n_var)
+  
+  # run efa with max factors, unrotated
+  fa_unrot <- fa(df, nfactors = max_k, rotate = "none", 
+                 scores = "tenBerge", impute = "median")
+  eigen <- fa_unrot$Vaccounted %>%
+    data.frame() %>%
+    rownames_to_column("param") %>%
+    gather(factor, value, -param) %>%
+    spread(param, value) %>%
+    filter(`SS loadings` > 1, `Proportion Explained` > 0.05)
+  retain_k <- nrow(eigen)
+  
+  fa_rot <- fa(df, nfactors = retain_k, rotate = rot_type,
+               scores = "tenBerge", impute = "median")
+  
+  loadings <- fa_rot$loadings[] %>%
+    data.frame() %>%
+    rownames_to_column("capacity") %>%
+    gather(factor, loading, -capacity) %>%
+    group_by(capacity) %>%
+    top_n(1, abs(loading)) %>%
+    ungroup() %>%
+    count(factor)
+  retain_k_final <- nrow(loadings)
+  
+  return(retain_k_final)
+}
+
+source("./scripts/p7_data_prep.R")
+```
+
+```{r}
+d1 <- d0 %>%
+  select(-contains("_dem_"), -ends_with("_cat"), -p7_ctry,
+         -contains("total"), -contains("check")) %>%
+  gather(question, response, -p7_subj) %>%
+  # rescale everything to be in 0, 1
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         response = case_when(
+           scale %in% c("abs", "exsen") ~ response,
+           scale == "dse" ~ response / 5,
+           scale == "hthk" ~ (response + 2) / 4,
+           scale %in% c("mm", "unev") ~ response / 3,
+           scale == "por" ~ response / 2,
+           scale == "se" ~ response / 4,
+           scale == "wob" ~ (response + 3) / 6)) %>%
+  # get rid of follow-up questions for porosity
+  filter(!grepl("_.$", question)) %>%
+  select(-scale) %>%
+  spread(question, response) %>%
+  column_to_rownames("p7_subj")
+```
+
+This is an exploration of dimensionality reduction on Packet 7 (last updated: 2019-05-19). KW thought of this in response to the general question of how (if at all) we can distinguish porosity "beliefs" from spiritual "experiences." 
+
+The basic question here is whether we can distinguish beliefs from experience by tracking patterns of covariance across individual participants: What are the "clusters" of questions that tended to hang together at the participant level (i.e., if someone endorsed one question, what else did they endorse)? If porosity and spiritual experience are fully redundant with each other, we would _not_ expect to see separate clusters of porosity vs. spiritual experience items.
+
+**Main take-away**: If we retain more than 2-3 factors, we end up distinguishing between porosity and spiritual experience. Two standard methods of determining how many factors to retain (parallel analysis and minimizing BIC) both suggest retaining six or more factors. 
+
+
+# Exploratory factor analysis (EFA)
+
+## Parallel analysis
+
+```{r}
+fa.parallel(d1)
+```
+
+Parallel analysis suggests retaining 13 factors.
+
+```{r}
+efa13 <- fa(d1, 13, rotate = "varimax")
+```
+
+```{r, fig.width = 8, fig.asp = 2, include = T}
+heatmap_fun(efa13, factor_names = paste0("MR", 1:13))
+```
+
+```{r}
+efa13_loadings <- efa13$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:13)))
+```
+
+```{r}
+efa13_loadings_dom <- efa13_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = T}
+efa13_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Quick interpretations:
+
+- **MR1 = spiritual experience I (dse/se)**
+- MR2 = absorption
+- MR3 = other personality (wob/abs)
+- **MR4 = martha mary**
+- **MR5 = spiritual experience II (se)**
+- MR6 = sense of control (wob)
+- MR7 = need for cognition I (hthk)
+- MR8 = launay-slade (unev)
+- MR9 = need for cognition II (hthk)
+- **MR10 = other porosity**
+- **MR11 = porosity**
+- MR12 = sheep-goat (exsen)
+- [MR13 = NULL]
+
+Focus on **items** that from DSE, SE, Porosity, & MM scales:
+
+```{r, fig.width = 6, fig.asp = 0.9, include = T}
+efa13_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa13_loadings) %>%
+  full_join(efa13_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r, fig.width = 6, fig.asp = 2, include = F}
+efa13_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa13_loadings) %>%
+  full_join(efa13_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  # filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+
+## Minimizing BIC
+
+```{r}
+VSS(d1)
+```
+
+Minimizing BIC suggests retaining 6 factors.
+
+```{r}
+efa6 <- fa(d1, 6, rotate = "varimax")
+```
+
+```{r, fig.width = 4, fig.asp = 3, include = T}
+heatmap_fun(efa6, factor_names = paste0("MR", 1:6))
+```
+
+```{r}
+efa6_loadings <- efa6$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:6)))
+```
+
+```{r}
+efa6_loadings_dom <- efa6_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = T}
+efa6_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Quick interpretations:
+
+- **MR1 = spiritual experience I (dse/se)**
+- MR2 = other personality (hthk/wob/abs)
+- MR3 = absorption (plus some exsen/hthk/unev)
+- **MR4 = porosity (mm/por)**
+- **MR5 = spiritual experience II (se/unev)**
+- MR6 = control (hthk/wob)
+
+Focus on **items** that from DSE, SE, Porosity, & MM scales:
+
+```{r, fig.width = 6, fig.asp = 0.9, include = T}
+efa6_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa6_loadings) %>%
+  full_join(efa6_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r, fig.width = 6, fig.asp = 2, include = T}
+efa6_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa6_loadings) %>%
+  full_join(efa6_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  # filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+## Weisman et al. (2017) retention criteria
+
+```{r}
+reten_fun(d1, "none")
+```
+
+The retention criteria employed in Weisman et al. (2017) suggest retaining 2 factors.
+
+```{r}
+efa2 <- fa(d1, 2, rotate = "varimax")
+```
+
+```{r, fig.width = 4, fig.asp = 3, include = T}
+heatmap_fun(efa2, factor_names = paste0("MR", 1:2))
+```
+
+```{r}
+efa2_loadings <- efa2$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:2)))
+```
+
+```{r}
+efa2_loadings_dom <- efa2_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = T}
+efa2_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Quick interpretations:
+
+- MR1 = porosity + spiritual experience? ("spiritual"?)
+- MR2 = absorption + personality? ("secular"?)
+
+Focus on **items** that from DSE, SE, Porosity, & MM scales:
+
+```{r, fig.width = 3, fig.asp = 1.5, include = T}
+efa2_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa2_loadings) %>%
+  full_join(efa2_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r, fig.width = 3, fig.asp = 3, include = F}
+efa2_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa2_loadings) %>%
+  full_join(efa2_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  # filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 2), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 20, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+## Four-factor solution
+
+Just for the hell of it, here's a four-factor solution.
+
+```{r}
+efa4 <- fa(d1, 4, rotate = "varimax")
+```
+
+```{r, fig.width = 4, fig.asp = 3, include = T}
+heatmap_fun(efa4, factor_names = paste0("MR", 1:4))
+```
+
+```{r}
+efa4_loadings <- efa4$loadings[] %>%
+  data.frame() %>%
+  rownames_to_column("question") %>%
+  gather(factor, loading, -question) %>%
+  mutate(scale = gsub("p7_", "", question),
+         scale = gsub("_.*$", "", scale),
+         factor = factor(factor, levels = paste0("MR", 1:4)))
+```
+
+```{r}
+efa4_loadings_dom <- efa4_loadings %>%
+  group_by(scale, question) %>%
+  top_n(1, abs(loading)) %>%
+  ungroup() %>%
+  arrange(factor, desc(abs(loading)))
+```
+
+```{r, include = T}
+efa4_loadings_dom %>%
+  count(factor, scale) %>%
+  complete(factor, scale, fill = list(n = ".")) %>%
+  spread(scale, n) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Quick interpretations:
+
+- MR1 = spiritual experience
+- MR2 = absorption (+ secular experience?)
+- MR3 = controls
+- MR4 = porosity (+ personality?)
+
+Focus on **items** that from DSE, SE, Porosity, & MM scales:
+
+```{r, fig.width = 3, fig.asp = 1.8, include = T}
+efa4_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa4_loadings) %>%
+  full_join(efa4_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 3), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 30, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+```{r, fig.width = 3, fig.asp = 3.7, include = F}
+efa4_loadings_dom %>% 
+  mutate(dom = "bold") %>% 
+  select(-loading) %>%
+  full_join(efa4_loadings) %>%
+  full_join(efa4_loadings_dom %>%
+              arrange(desc(factor), abs(loading)) %>%
+              mutate(order = 1:nrow(.)) %>%
+              select(scale, question, order)) %>%
+  mutate(dom = ifelse(is.na(dom), "plain", dom)) %>%
+  # filter(scale %in% c("dse", "se", "por", "mm")) %>%
+  ggplot(aes(x = factor, y = reorder(question, order),
+             fill = loading, label = format(round(loading, 3), nsmall =))) +
+  facet_grid(scale ~ ., scales = "free", space = "free") +
+  geom_tile(color = "black") +
+  geom_text(aes(size = dom, fontface = dom)) + 
+  scale_fill_distiller("Factor loading", palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barheight = 30, barwidth = 1)) +
+  scale_x_discrete(position = "top") +
+  scale_size_manual("Dominant factor?", 
+                    values = c(3, 2), labels = c("dominant", "not dominant")) +
+  theme_minimal() +
+  theme(axis.title = element_blank())
+```
+
+
+
+```{r, fig.width = 3, fig.asp = 4}
+# EXTRA
+# hierarchical clustering
+clust <- d1 %>% t() %>% dist() %>% hclust()
+
+clust %>%
+  ggdendrogram(rotate = T) +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  labs(title = "Hierarchical agglomerative clustering", 
+       subtitle = "Complete linkage (default for stats::hclust() function)",
+       y = "Height", x = "Question")
+```

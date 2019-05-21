@@ -1,0 +1,940 @@
+---
+title: "Packet 7 absorption vs. porosity"
+date: "2019-05-20"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+```{r global_options, include = F}
+knitr::opts_chunk$set(fig.width = 4, fig.asp = 0.67,
+                      include = F, echo = F)
+```
+
+```{r}
+library(tidyverse)
+library(langcog)
+library(psych)
+library(readxl)
+library(cowplot)
+library(lme4)
+library(lmerTest)
+library(kableExtra)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+source("./scripts/p7_data_prep.R")
+```
+
+In this document, I explore the following big question: **Which is more important for predicting spiritual experience—absorption (which we take to be primarily an indivdual difference) or porosity (which we take to be primarily a cultural difference)?**
+
+# Preliminaries
+
+## Reliability
+
+In comparing the predictive power of Absorption, Pororisty, and Martha Story, we should bear in mind the reliability of these scales. Reliability sets an upper limit to the degree with which a scale can be correlated with any other scale. For example, if the reliability of Scale X is $\alpha$ = 0.6, it is extremely unlikely (almost impossible) for Scale X to be correlated with any other scale at a strength > _r_ = 0.6. If Scale Y is much more reliable than Scale X, the upper bound on correlations with Scale Y is also higher than the upper bound on correlations with Scale X—so if we observe stronger relationships with Scale Y than Scale X, this should not surprise us and we should be cautious in concluding that Scale Y is a "better predictor" than Scale X (since this could simply be an artifact of its higher reliability).
+
+```{r}
+alpha_abs <- d0 %>%
+  select(contains("_abs_"), -contains("total"), -contains("check"), -ends_with("_cat")) %>%
+  psych::alpha()
+
+alpha_por <- d0 %>%
+  select(contains("_por_"), -contains("total"), -contains("check"), -ends_with("_cat"), -ends_with("_a"), -ends_with("_b"), -ends_with("_c")) %>%
+  psych::alpha()
+
+alpha_mm <- d0 %>%
+  select(contains("_mm_"), -contains("total"), -contains("check"), -ends_with("_cat")) %>%
+  psych::alpha()
+```
+
+```{r, include = T}
+data.frame(scale = c("Absorption", "Porosity", "Martha Story"),
+           alpha = c(as.numeric(alpha_abs$total["raw_alpha"]),
+                     as.numeric(alpha_por$total["raw_alpha"]),
+                     as.numeric(alpha_mm$total["raw_alpha"]))) %>%
+  rename("Cronbach's alpha (raw)" = alpha) %>%
+  kable(digits = 2,
+        caption = "Reliability for predictors. Cronbach's alpha > 0.8 is the traditional gold standard for 'good' reliability.") %>%
+  kable_styling()
+```
+
+**Our predictors are all very reliable scales, and they are roughly equally reliable**. This makes me feel relatively confident in interpreting differences across predictors, because they all share similar (high) upper bounds for correlations with other measures. 
+
+## Multicollinearity
+
+_A.k.a., correlations among predictor variables_
+
+In interpreting any models that include both Absorption and Porosity/Martha Story as predictors, we should always keep in mind the issue of "multicollinearity": strong correlations among predictors. If highly correlated predictors are included in the same model, our estimates of the beta coefficients may be very unstable (i.e., small changes to the data or model would result in big changes to the coefficients), and predictors that might truly be related (even quite strongly) to the outcome might not come out as "significant."
+
+Here is a summary of the correlations among our predictors of interest:
+
+```{r}
+cor1 <- cor.test(~ abs + por, data = d_std)
+cor2 <- cor.test(~ abs + mm, data = d_std)
+cor3 <- cor.test(~ por + mm, data = d_std)
+```
+
+```{r, include = T}
+data.frame(pair = c("Absorption and Porosity",
+                    "Absorption and Martha Story",
+                    "Porosity and Martha Story"),
+           r = c(cor1$estimate, cor2$estimate, cor3$estimate),
+           p = c(cor1$p.value, cor2$p.value, cor3$p.value)) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 3))) %>%
+  rename("Pearson's r" = r,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "r", "r", "l"),
+        caption = "Correlations among predictors.") %>%
+  kable_styling()
+```
+
+**Our predictors (Absorption, Porosity, Martha Story) are all significantly correlated with each other**, although the correlations between Absorption and the two porosity indices are no so extremely strong as to be deeply worrying. Still, we should remember to be cautious in placing too much stake in the beta coefficients or significance tests for models that include multiple predictors.
+
+# Collapsing across sites
+
+## Simple models
+
+```{r}
+r1 <- lm(dse ~ abs, d_std)
+summary(r1)
+```
+
+```{r}
+r2 <- lm(se ~ abs, d_std)
+summary(r2)
+```
+
+```{r}
+r3 <- lm(dse ~ por, d_std)
+summary(r3)
+```
+
+```{r}
+r4 <- lm(se ~ por, d_std)
+summary(r4)
+```
+
+```{r}
+r5 <- lm(dse ~ mm, d_std)
+summary(r5)
+```
+
+```{r}
+r6 <- lm(se ~ mm, d_std)
+summary(r6)
+```
+
+I ran a series of very simple regression models, which each used a single predictor (either Absorption, Porosity, or Martha Story) to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = paste0("r", 1:6),
+           predictor = c(rep("Absorption", 2), 
+                         rep("Porosity (Dulin)", 2), 
+                         rep("Martha Story", 2)),
+           outcome = rep(c("Daily Spiritual Experiences", 
+                           "Spiritual Events"), 3),
+           beta = c(summary(r1)$coefficients["abs", "Estimate"],
+                    summary(r2)$coefficients["abs", "Estimate"],
+                    summary(r3)$coefficients["por", "Estimate"],
+                    summary(r4)$coefficients["por", "Estimate"],
+                    summary(r5)$coefficients["mm", "Estimate"],
+                    summary(r6)$coefficients["mm", "Estimate"]),
+           p = c(summary(r1)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r2)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r3)$coefficients["por", "Pr(>|t|)"],
+                    summary(r4)$coefficients["por", "Pr(>|t|)"],
+                    summary(r5)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r6)$coefficients["mm", "Pr(>|t|)"]),
+           rsq = c(summary(r1)$r.squared,
+                   summary(r2)$r.squared,
+                   summary(r3)$r.squared,
+                   summary(r4)$r.squared,
+                   summary(r5)$r.squared,
+                   summary(r6)$r.squared)) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif, rsq) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif,
+         "R-squared" = rsq) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l", "r"),
+        caption = "Results of simple regressions, using a single predictor to predict a single outcome—e.g., lm(DSE ~ Absorption). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+These comparisons suggest that **Porosity (Dulin) and Martha Story were stronger predictors than Absorption**, accounting for more of the variance in spiritual experiences (as indexed by either DSE or SE).
+
+
+## Additive models
+
+```{r}
+r7 <- lm(dse ~ abs + por, d_std)
+summary(r7)
+```
+
+```{r}
+r8 <- lm(se ~ abs + por, d_std)
+summary(r8)
+```
+
+```{r}
+r9 <- lm(dse ~ abs + mm, d_std)
+summary(r9)
+```
+
+```{r}
+r10 <- lm(se ~ abs + mm, d_std)
+summary(r10)
+```
+
+I ran a series of additive regression models, which each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r7", 2), rep("r8", 2),
+                     rep("r9", 2), rep("r10", 2)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity)",
+                             "Porosity (ctl. for Absorption)"), 2),
+                         rep(c("Absorption (ctl. for Martha Story)",
+                               "Martha Story (ctl. for Absorption)"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 2),
+                             rep("Spiritual Events", 2)), 2)),
+           beta = c(summary(r7)$coefficients["abs", "Estimate"],
+                    summary(r7)$coefficients["por", "Estimate"],
+                    summary(r8)$coefficients["abs", "Estimate"],
+                    summary(r8)$coefficients["por", "Estimate"],
+                    summary(r9)$coefficients["abs", "Estimate"],
+                    summary(r9)$coefficients["mm", "Estimate"],
+                    summary(r10)$coefficients["abs", "Estimate"],
+                    summary(r10)$coefficients["mm", "Estimate"]),
+           p = c(summary(r7)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r7)$coefficients["por", "Pr(>|t|)"],
+                 summary(r8)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r8)$coefficients["por", "Pr(>|t|)"],
+                 summary(r9)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r9)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r10)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r10)$coefficients["mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of additive models, using two predictors to predict a single outcome—e.g., lm(DSE ~ Absorption + Porosity). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+These comparisons again suggest that **Porosity (Dulin) and Martha Story were stronger predictors than Absorption**; i.e., the beta coefficients for Porosity or Martha Story were larger than the beta coefficients for Absorption. In some cases (namely, when using DSE as an index of spiritual experience), Absorption appeared no longer to be a significant predictor of spiritual experience after controlling for Porosity/Martha Story, but this should be interpreted with caution in the context of a substantial correlation between Absorption and Porosity/Martha Story (see [Multicollinearity], above).
+
+## Interactive models
+
+```{r}
+r11 <- lm(dse ~ abs * por, d_std)
+summary(r11)
+```
+
+```{r}
+r12 <- lm(se ~ abs * por, d_std)
+summary(r12)
+```
+
+```{r}
+r13 <- lm(dse ~ abs * mm, d_std)
+summary(r13)
+```
+
+```{r}
+r14 <- lm(se ~ abs * mm, d_std)
+summary(r14)
+```
+
+I ran a series of interactive regression models, which each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) and an interaction between predictors to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r11", 3), rep("r12", 3),
+                     rep("r13", 3), rep("r14", 3)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity, interaction)",
+                               "Porosity (ctl. for Absorption, interaction)", 
+                               "Interaction"), 2),
+                         rep(c("Absorption (ctl. for Martha Story, interaction)",
+                               "Martha Story (ctl. for Absorption, interaction)",
+                               "Interaction"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 3),
+                             rep("Spiritual Events", 3)), 2)),
+           beta = c(summary(r11)$coefficients["abs", "Estimate"],
+                    summary(r11)$coefficients["por", "Estimate"],
+                    summary(r11)$coefficients["abs:por", "Estimate"],
+                    summary(r12)$coefficients["abs", "Estimate"],
+                    summary(r12)$coefficients["por", "Estimate"],
+                    summary(r12)$coefficients["abs:por", "Estimate"],
+                    summary(r13)$coefficients["abs", "Estimate"],
+                    summary(r13)$coefficients["mm", "Estimate"],
+                    summary(r13)$coefficients["abs:mm", "Estimate"],
+                    summary(r14)$coefficients["abs", "Estimate"],
+                    summary(r14)$coefficients["mm", "Estimate"],
+                    summary(r14)$coefficients["abs:mm", "Estimate"]),
+           p = c(summary(r11)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r11)$coefficients["por", "Pr(>|t|)"],
+                 summary(r11)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r12)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r12)$coefficients["por", "Pr(>|t|)"],
+                 summary(r12)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r13)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r13)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r13)$coefficients["abs:mm", "Pr(>|t|)"],
+                 summary(r14)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r14)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r14)$coefficients["abs:mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of interactive models, using two predictors and an interaction between them to predict a single outcome—e.g., lm(DSE ~ Absorption * Porosity). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+My take-aways here are identical to the take-aways for the additive models in the previous section (see [Additive models], above): These comparisons again suggest that **Porosity (Dulin) and Martha Story were stronger predictors than Absorption**; i.e., the beta coefficients for Porosity or Martha Story were larger than the beta coefficients for Absorption. Again, in some cases (namely, when using DSE as an index of spiritual experience), Absorption appeared no longer to be a significant predictor of spiritual experience after controlling for Porosity/Martha Story, but this should be interpreted with caution in the context of a substantial correlation between Absorption and Porosity/Martha Story (see [Multicollinearity], above).
+
+Moreover, we observed **no evidence for an interaction between Absorption and Porosity/Martha Story** in any of these models.
+
+
+# Including site differences
+
+## Simple models
+
+```{r}
+r15 <- lm(dse ~ abs * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r15)
+```
+
+```{r}
+r16 <- lm(se ~ abs * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r16)
+```
+
+```{r}
+r17 <- lm(dse ~ por * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r17)
+```
+
+```{r}
+r18 <- lm(se ~ por * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r18)
+```
+
+```{r}
+r19 <- lm(dse ~ mm * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r19)
+```
+
+```{r}
+r20 <- lm(se ~ mm * p7_ctry, d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r20)
+```
+
+I ran a series of simple regression models parallel to the models included in [Simple models]; these models each used a single predictor of interest (either Absorption, Porosity, or Martha Story) as well as overall site differences and interactions with site to predict a single outcome (either DSE or SE). As above, we can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = paste0("r", 15:20),
+           predictor = c(rep("Absorption", 2), 
+                         rep("Porosity (Dulin)", 2), 
+                         rep("Martha Story", 2)),
+           outcome = rep(c("Daily Spiritual Experiences", 
+                           "Spiritual Events"), 3),
+           beta = c(summary(r15)$coefficients["abs", "Estimate"],
+                    summary(r16)$coefficients["abs", "Estimate"],
+                    summary(r17)$coefficients["por", "Estimate"],
+                    summary(r18)$coefficients["por", "Estimate"],
+                    summary(r19)$coefficients["mm", "Estimate"],
+                    summary(r20)$coefficients["mm", "Estimate"]),
+           p = c(summary(r15)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r16)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r17)$coefficients["por", "Pr(>|t|)"],
+                    summary(r18)$coefficients["por", "Pr(>|t|)"],
+                    summary(r19)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r20)$coefficients["mm", "Pr(>|t|)"]),
+           rsq = c(summary(r15)$r.squared,
+                   summary(r16)$r.squared,
+                   summary(r17)$r.squared,
+                   summary(r18)$r.squared,
+                   summary(r19)$r.squared,
+                   summary(r20)$r.squared)) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif, rsq) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif,
+         "R-squared" = rsq) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l", "r"),
+        caption = "Results of simple regressions, using a single predictor plus site differences to predict a single outcome—e.g., lm(DSE ~ Absorption * site). All variables were standardized (collapsing across sites). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+These comparisons suggest that **Porosity (Dulin) was a stronger predictor than Absorption, with Martha Story somewhere in between**; the differences are not as striking once we take into account overall site differences in spiritual experience and intearctions between predictors and site.
+
+
+## Additive models
+
+```{r}
+r21 <- lm(dse ~ (abs + por) * p7_ctry, 
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r21)
+```
+
+```{r}
+r22 <- lm(se ~ (abs + por) * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r22)
+```
+
+```{r}
+r23 <- lm(dse ~ (abs + mm) * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r23)
+```
+
+```{r}
+r24 <- lm(se ~ (abs + mm) * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r24)
+```
+
+I ran a series of additive regression models parallel to the models included in [Additive models]; these models each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) as well as overall site differences and interactions with site to predict a single outcome (either DSE or SE). As above, we can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r21", 2), rep("r22", 2),
+                     rep("r23", 2), rep("r24", 2)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity)",
+                             "Porosity (ctl. for Absorption)"), 2),
+                         rep(c("Absorption (ctl. for Martha Story)",
+                               "Martha Story (ctl. for Absorption)"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 2),
+                             rep("Spiritual Events", 2)), 2)),
+           beta = c(summary(r21)$coefficients["abs", "Estimate"],
+                    summary(r21)$coefficients["por", "Estimate"],
+                    summary(r22)$coefficients["abs", "Estimate"],
+                    summary(r22)$coefficients["por", "Estimate"],
+                    summary(r23)$coefficients["abs", "Estimate"],
+                    summary(r23)$coefficients["mm", "Estimate"],
+                    summary(r24)$coefficients["abs", "Estimate"],
+                    summary(r24)$coefficients["mm", "Estimate"]),
+           p = c(summary(r21)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r21)$coefficients["por", "Pr(>|t|)"],
+                 summary(r22)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r22)$coefficients["por", "Pr(>|t|)"],
+                 summary(r23)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r23)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r24)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r24)$coefficients["mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of additive models, using two predictors plus site differences to predict a single outcome—e.g., lm(DSE ~ (Absorption + Porosity) * site). All variables were standardized (collapsing across sites). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+As above, these comparisons generally suggest that **Porosity (Dulin) was a stronger predictor than Absorption, with Martha Story somewhere in between**; i.e., the beta coefficients for Porosity or Martha Story were larger than the beta coefficients for Absorption. In all of these cases, however, both Absorption and Porosity/Martha Mary always remain significant predictors of spiritual experience after controlling for each other.
+
+## Interactive models
+
+```{r}
+r25 <- lm(dse ~ abs * por * p7_ctry, 
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r25)
+```
+
+```{r}
+r26 <- lm(se ~ abs * por * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r26)
+```
+
+```{r}
+r27 <- lm(dse ~ abs * mm * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r27)
+```
+
+```{r}
+r28 <- lm(se ~ abs * mm * p7_ctry,
+          d_std, contrasts = list(p7_ctry = "contr.sum"))
+summary(r28)
+```
+
+I ran a series of interactive regression models parallel to the models included in [Interactive models]; these models each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) and an interaction between predictors as well as overall site differences and interaction with site to predict a single outcome (either DSE or SE). As above, we can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r25", 3), rep("r26", 3),
+                     rep("r27", 3), rep("r28", 3)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity, interaction)",
+                               "Porosity (ctl. for Absorption, interaction)", 
+                               "Interaction"), 2),
+                         rep(c("Absorption (ctl. for Martha Story, interaction)",
+                               "Martha Story (ctl. for Absorption, interaction)",
+                               "Interaction"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 3),
+                             rep("Spiritual Events", 3)), 2)),
+           beta = c(summary(r25)$coefficients["abs", "Estimate"],
+                    summary(r25)$coefficients["por", "Estimate"],
+                    summary(r25)$coefficients["abs:por", "Estimate"],
+                    summary(r26)$coefficients["abs", "Estimate"],
+                    summary(r26)$coefficients["por", "Estimate"],
+                    summary(r26)$coefficients["abs:por", "Estimate"],
+                    summary(r27)$coefficients["abs", "Estimate"],
+                    summary(r27)$coefficients["mm", "Estimate"],
+                    summary(r27)$coefficients["abs:mm", "Estimate"],
+                    summary(r28)$coefficients["abs", "Estimate"],
+                    summary(r28)$coefficients["mm", "Estimate"],
+                    summary(r28)$coefficients["abs:mm", "Estimate"]),
+           p = c(summary(r25)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r25)$coefficients["por", "Pr(>|t|)"],
+                 summary(r25)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r26)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r26)$coefficients["por", "Pr(>|t|)"],
+                 summary(r26)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r27)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r27)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r27)$coefficients["abs:mm", "Pr(>|t|)"],
+                 summary(r28)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r28)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r28)$coefficients["abs:mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  select(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of interactive models, using two predictors, an interaction between them, plus site differences to predict a single outcome—e.g., lm(DSE ~ Absorption * Porosity * site). All variables were standardized (collapsing across sites). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+Yet again, these comparisons again suggest that **Porosity (Dulin) was a stronger predictor than Absorption, with Martha Story somewhere in between**; i.e., the beta coefficients for Porosity or Martha Story were larger than the beta coefficients for Absorption. In all of these cases, however, both Absorption and Porosity/Martha Story remain significant predictors ever controlling for each other.
+
+And again, we observed **no evidence for an interaction between Absorption and Porosity/Martha Story** in any of these models.
+
+
+# Within each site separately
+
+## Simple models
+
+```{r}
+r29_us <- lm(dse ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r29_us)
+r29_gh <- lm(dse ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r29_gh)
+r29_th <- lm(dse ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r29_th)
+r29_ch <- lm(dse ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r29_ch)
+r29_vt <- lm(dse ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r29_vt)
+```
+
+```{r}
+r30_us <- lm(se ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r30_us)
+r30_gh <- lm(se ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r30_gh)
+r30_th <- lm(se ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r30_th)
+r30_ch <- lm(se ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r30_ch)
+r30_vt <- lm(se ~ abs, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r30_vt)
+```
+
+```{r}
+r31_us <- lm(dse ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r31_us)
+r31_gh <- lm(dse ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r31_gh)
+r31_th <- lm(dse ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r31_th)
+r31_ch <- lm(dse ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r31_ch)
+r31_vt <- lm(dse ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r31_vt)
+```
+
+```{r}
+r32_us <- lm(se ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r32_us)
+r32_gh <- lm(se ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r32_gh)
+r32_th <- lm(se ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r32_th)
+r32_ch <- lm(se ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r32_ch)
+r32_vt <- lm(se ~ por, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r32_vt)
+```
+
+```{r}
+r33_us <- lm(dse ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r33_us)
+r33_gh <- lm(dse ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r33_gh)
+r33_th <- lm(dse ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r33_th)
+r33_ch <- lm(dse ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r33_ch)
+r33_vt <- lm(dse ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r33_vt)
+```
+
+```{r}
+r34_us <- lm(se ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r34_us)
+r34_gh <- lm(se ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r34_gh)
+r34_th <- lm(se ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r34_th)
+r34_ch <- lm(se ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r34_ch)
+r34_vt <- lm(se ~ mm, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r34_vt)
+```
+
+I ran a series of very simple regression models parallel to those included in [Simple models], which each used a single predictor (either Absorption, Porosity, or Martha Story) to predict a single outcome (either DSE or SE) within each site individually. As above, we can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(paste0(c("r29", "r30", "r31", "r32", "r33", "r34"), "_us"),
+                     paste0(c("r29", "r30", "r31", "r32", "r33", "r34"), "_gh"),
+                     paste0(c("r29", "r30", "r31", "r32", "r33", "r34"), "_th"),
+                     paste0(c("r29", "r30", "r31", "r32", "r33", "r34"), "_ch"),
+                     paste0(c("r29", "r30", "r31", "r32", "r33", "r34"), "_vt")),
+           predictor = rep(c(rep("Absorption", 2), 
+                             rep("Porosity (Dulin)", 2), 
+                             rep("Martha Story", 2)), 5),
+           outcome = rep(c("Daily Spiritual Experiences", 
+                           "Spiritual Events"), 15),
+           beta = c(summary(r29_us)$coefficients["abs", "Estimate"],
+                    summary(r29_gh)$coefficients["abs", "Estimate"],
+                    summary(r29_th)$coefficients["abs", "Estimate"],
+                    summary(r29_ch)$coefficients["abs", "Estimate"],
+                    summary(r29_vt)$coefficients["abs", "Estimate"],
+                    summary(r30_us)$coefficients["abs", "Estimate"],
+                    summary(r30_gh)$coefficients["abs", "Estimate"],
+                    summary(r30_th)$coefficients["abs", "Estimate"],
+                    summary(r30_ch)$coefficients["abs", "Estimate"],
+                    summary(r30_vt)$coefficients["abs", "Estimate"],
+                    summary(r31_us)$coefficients["por", "Estimate"],
+                    summary(r31_gh)$coefficients["por", "Estimate"],
+                    summary(r31_th)$coefficients["por", "Estimate"],
+                    summary(r31_ch)$coefficients["por", "Estimate"],
+                    summary(r31_vt)$coefficients["por", "Estimate"],
+                    summary(r32_us)$coefficients["por", "Estimate"],
+                    summary(r32_gh)$coefficients["por", "Estimate"],
+                    summary(r32_th)$coefficients["por", "Estimate"],
+                    summary(r32_ch)$coefficients["por", "Estimate"],
+                    summary(r32_vt)$coefficients["por", "Estimate"],
+                    summary(r33_us)$coefficients["mm", "Estimate"],
+                    summary(r33_gh)$coefficients["mm", "Estimate"],
+                    summary(r33_th)$coefficients["mm", "Estimate"],
+                    summary(r33_ch)$coefficients["mm", "Estimate"],
+                    summary(r33_vt)$coefficients["mm", "Estimate"],
+                    summary(r34_us)$coefficients["mm", "Estimate"],
+                    summary(r34_gh)$coefficients["mm", "Estimate"],
+                    summary(r34_th)$coefficients["mm", "Estimate"],
+                    summary(r34_ch)$coefficients["mm", "Estimate"],
+                    summary(r34_vt)$coefficients["mm", "Estimate"]),
+           p = c(summary(r29_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r29_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r29_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r29_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r29_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r30_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r30_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r30_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r30_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r30_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r31_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r31_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r31_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r31_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r31_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r32_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r32_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r32_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r32_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r32_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r33_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r33_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r33_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r33_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r33_vt)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r34_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r34_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r34_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r34_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r34_vt)$coefficients["mm", "Pr(>|t|)"]),
+           rsq = c(summary(r29_us)$r.squared, 
+                   summary(r29_gh)$r.squared,
+                   summary(r29_th)$r.squared,
+                   summary(r29_ch)$r.squared,
+                   summary(r29_vt)$r.squared,
+                   summary(r30_us)$r.squared, 
+                   summary(r30_gh)$r.squared,
+                   summary(r30_th)$r.squared,
+                   summary(r30_ch)$r.squared,
+                   summary(r30_vt)$r.squared,
+                   summary(r31_us)$r.squared, 
+                   summary(r31_gh)$r.squared,
+                   summary(r31_th)$r.squared,
+                   summary(r31_ch)$r.squared,
+                   summary(r31_vt)$r.squared,
+                   summary(r32_us)$r.squared, 
+                   summary(r32_gh)$r.squared,
+                   summary(r32_th)$r.squared,
+                   summary(r32_ch)$r.squared,
+                   summary(r32_vt)$r.squared,
+                   summary(r33_us)$r.squared, 
+                   summary(r33_gh)$r.squared,
+                   summary(r33_th)$r.squared,
+                   summary(r33_ch)$r.squared,
+                   summary(r33_vt)$r.squared,
+                   summary(r34_us)$r.squared, 
+                   summary(r34_gh)$r.squared,
+                   summary(r34_th)$r.squared,
+                   summary(r34_ch)$r.squared,
+                   summary(r34_vt)$r.squared)) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2)),
+         site = gsub("^.*_", "", model),
+         site = factor(site, 
+                       levels = c("us", "gh", "th", "ch", "vt"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu")),
+         model = gsub("_.*$", "", model)) %>%
+  select(outcome, site, model, predictor, beta, p, signif, rsq) %>%
+  arrange(outcome, site) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif,
+         "R-squared" = rsq) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l", "r"),
+        caption = "Results of simple regressions, using a single predictor to predict a single outcome—e.g., lm(DSE ~ Absorption). All variables were standardized (within each site). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:3)
+```
+
+These comparisons suggest **no consistent pattern across sites**, which makes some sense in light of our theory that porosity (in particular) is a cultural difference.
+
+
+## Additive models
+
+```{r}
+r35_us <- lm(dse ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r35_us)
+r35_gh <- lm(dse ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r35_gh)
+r35_th <- lm(dse ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r35_th)
+r35_ch <- lm(dse ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r35_ch)
+r35_vt <- lm(dse ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r35_vt)
+```
+
+```{r}
+r36_us <- lm(se ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r36_us)
+r36_gh <- lm(se ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r36_gh)
+r36_th <- lm(se ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r36_th)
+r36_ch <- lm(se ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r36_ch)
+r36_vt <- lm(se ~ abs + por, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r36_vt)
+```
+
+```{r}
+r37_us <- lm(dse ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r37_us)
+r37_gh <- lm(dse ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r37_gh)
+r37_th <- lm(dse ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r37_th)
+r37_ch <- lm(dse ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r37_ch)
+r37_vt <- lm(dse ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r37_vt)
+```
+
+```{r}
+r38_us <- lm(se ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "US")); #summary(r38_us)
+r38_gh <- lm(se ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Ghana")); #summary(r38_gh)
+r38_th <- lm(se ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Thailand")); #summary(r38_th)
+r38_ch <- lm(se ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "China")); #summary(r38_ch)
+r38_vt <- lm(se ~ abs + mm, 
+             d_std_bysite %>% filter(p7_ctry == "Vanuatu")); #summary(r38_vt)
+```
+
+I ran a series of regression models parallel to those included in [Additive models], which each used two predictor (either Absorption and Porosity, or Absorption and Martha Story) to predict a single outcome (either DSE or SE) within each site individually. As above, we can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r35_us", 2), rep("r36_us", 2), 
+                     rep("r37_us", 2), rep("r38_us", 2),
+                     rep("r35_gh", 2), rep("r36_gh", 2), 
+                     rep("r37_gh", 2), rep("r38_gh", 2),
+                     rep("r35_th", 2), rep("r36_th", 2), 
+                     rep("r37_th", 2), rep("r38_th", 2),
+                     rep("r35_ch", 2), rep("r36_ch", 2), 
+                     rep("r37_ch", 2), rep("r38_ch", 2),
+                     rep("r35_vt", 2), rep("r36_vt", 2), 
+                     rep("r37_vt", 2), rep("r38_vt", 2)),
+           predictor = rep(c(rep(c("Absorption (ctl. for Porosity)",
+                                   "Porosity (ctl. for Absorption)"), 2),
+                             rep(c("Absorption (ctl. for Martha Story)",
+                                   "Martha Story (ctl. for Absorption)"), 2)), 5),
+           outcome = rep(c(rep(c(rep("Daily Spiritual Experiences", 2),
+                                 rep("Spiritual Events", 2)), 2)), 15),
+           
+           beta = c(summary(r35_us)$coefficients["abs", "Estimate"],
+                    summary(r35_us)$coefficients["por", "Estimate"],
+                    summary(r35_gh)$coefficients["abs", "Estimate"],
+                    summary(r35_gh)$coefficients["por", "Estimate"],
+                    summary(r35_th)$coefficients["abs", "Estimate"],
+                    summary(r35_th)$coefficients["por", "Estimate"],
+                    summary(r35_ch)$coefficients["abs", "Estimate"],
+                    summary(r35_ch)$coefficients["por", "Estimate"],
+                    summary(r35_vt)$coefficients["abs", "Estimate"],
+                    summary(r35_vt)$coefficients["por", "Estimate"],
+                    summary(r36_us)$coefficients["abs", "Estimate"],
+                    summary(r36_us)$coefficients["por", "Estimate"],
+                    summary(r36_gh)$coefficients["abs", "Estimate"],
+                    summary(r36_gh)$coefficients["por", "Estimate"],
+                    summary(r36_th)$coefficients["abs", "Estimate"],
+                    summary(r36_th)$coefficients["por", "Estimate"],
+                    summary(r36_ch)$coefficients["abs", "Estimate"],
+                    summary(r36_ch)$coefficients["por", "Estimate"],
+                    summary(r36_vt)$coefficients["abs", "Estimate"],
+                    summary(r36_vt)$coefficients["por", "Estimate"],
+                    summary(r37_us)$coefficients["abs", "Estimate"],
+                    summary(r37_us)$coefficients["mm", "Estimate"],
+                    summary(r37_gh)$coefficients["abs", "Estimate"],
+                    summary(r37_gh)$coefficients["mm", "Estimate"],
+                    summary(r37_th)$coefficients["abs", "Estimate"],
+                    summary(r37_th)$coefficients["mm", "Estimate"],
+                    summary(r37_ch)$coefficients["abs", "Estimate"],
+                    summary(r37_ch)$coefficients["mm", "Estimate"],
+                    summary(r37_vt)$coefficients["abs", "Estimate"],
+                    summary(r37_vt)$coefficients["mm", "Estimate"],
+                    summary(r38_us)$coefficients["abs", "Estimate"],
+                    summary(r38_us)$coefficients["mm", "Estimate"],
+                    summary(r38_gh)$coefficients["abs", "Estimate"],
+                    summary(r38_gh)$coefficients["mm", "Estimate"],
+                    summary(r38_th)$coefficients["abs", "Estimate"],
+                    summary(r38_th)$coefficients["mm", "Estimate"],
+                    summary(r38_ch)$coefficients["abs", "Estimate"],
+                    summary(r38_ch)$coefficients["mm", "Estimate"],
+                    summary(r38_vt)$coefficients["abs", "Estimate"],
+                    summary(r38_vt)$coefficients["mm", "Estimate"]),
+           p = c(summary(r35_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r35_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r35_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r35_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r35_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r35_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r35_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r35_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r35_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r35_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r36_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r36_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r36_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r36_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r36_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r36_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r36_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r36_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r36_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r36_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r37_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r37_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r37_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r37_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r37_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r37_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r37_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r37_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r37_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r37_vt)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r38_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r38_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r38_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r38_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r38_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r38_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r38_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r38_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r38_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r38_vt)$coefficients["mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2)),
+         site = gsub("^.*_", "", model),
+         site = factor(site, 
+                       levels = c("us", "gh", "th", "ch", "vt"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu")),
+         model = gsub("_.*$", "", model)) %>%
+  select(outcome, site, model, predictor, beta, p, signif) %>%
+  distinct() %>%
+  arrange(outcome, site, model) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of additive regressions, using two predictors to predict a single outcome—e.g., lm(DSE ~ Absorption + Porosity) within each site. All variables were standardized (within each site). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:3)
+```
+
+Again, this is kind of all over the place! **No consistent pattern across sites**, though again this kind of makes sense in light of our theory that porosity is primarily a cultural difference.
+
+## Interactive models
+
+[not yet run]
+
+
+# KW to-do list
+
+Next steps:
+
+- Account for religiosity
+- More complex models (mixed effects, 2 indices of spex)

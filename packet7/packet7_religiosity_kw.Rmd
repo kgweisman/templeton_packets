@@ -1,0 +1,923 @@
+---
+title: "Religiosity"
+date: "2019-05-20"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+```{r global_options, include = F}
+knitr::opts_chunk$set(fig.width = 4, fig.asp = 0.67,
+                      include = F, echo = F)
+```
+
+```{r}
+library(tidyverse)
+library(langcog)
+library(psych)
+library(readxl)
+library(cowplot)
+library(lme4)
+library(lmerTest)
+library(kableExtra)
+library(lubridate)
+
+theme_set(theme_bw())
+```
+
+```{r}
+source("./scripts/p7_data_prep.R")
+```
+
+In this document, I explore the following big question: **What role does religiosity play in the relationships between absorption, porosity, and spiritual experience?**
+
+I focus on Packet 7 for now, but we should also look at Spiritual Epi (no absorption).
+
+```{r}
+d <- d0 %>% 
+  distinct(p7_subj, p7_dem_how.sprt.relg) %>%
+  mutate(relig = scale(p7_dem_how.sprt.relg, scale = T),
+         relig = as.numeric(relig)) %>%
+  distinct(p7_subj, relig) %>%
+  full_join(d_std)
+```
+
+# Correlations
+
+```{r, fig.width = 3, fig.asp = 0.8, include = T}
+d %>%
+  distinct(p7_subj, relig, abs, por, mm, dse, se) %>%
+  column_to_rownames("p7_subj") %>%
+  cor(use = "pairwise") %>%
+  data.frame() %>%
+  rownames_to_column("var1") %>%
+  gather(var2, r, -var1) %>%
+  mutate_at(vars(var1, var2), 
+            funs(factor(., levels = c("relig", "abs", "por", "mm", "dse", "se"),
+                        labels = c("Religiosity", "Absorption", "Porosity (Dulin)",
+                                   "Martha Story", "DSE", "Spiritual Events")))) %>%
+  ggplot(aes(x = var1, y = var2, fill = r, 
+             label = format(round(r, 2), nsmall = 2))) +
+  geom_tile(color = "black") +
+  scale_fill_distiller(palette = "RdYlBu", limits = c(-1, 1),
+                       guide = guide_colorbar(barwidth = 1, barheight = 10)) +
+  geom_text() +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  labs(title = "Pearson correlations (Packet 7)",
+       subtitle = "All variables were standardized (collapsing across sites)")
+```
+
+Religiosity was highly correlated with everything except for Absorption—and especially highly correlated with the DSE.
+
+# Collapsing across sites
+
+## Simple models
+
+```{r}
+r1 <- lm(dse ~ abs * relig, d)
+summary(r1)
+```
+
+```{r}
+r2 <- lm(se ~ abs * relig, d)
+summary(r2)
+```
+
+```{r}
+r3 <- lm(dse ~ por * relig, d)
+summary(r3)
+```
+
+```{r}
+r4 <- lm(se ~ por * relig, d)
+summary(r4)
+```
+
+```{r}
+r5 <- lm(dse ~ mm * relig, d)
+summary(r5)
+```
+
+```{r}
+r6 <- lm(se ~ mm * relig, d)
+summary(r6)
+```
+
+I ran a series of simple regression models, which each used a single predictor (either Absorption, Porosity, or Martha Story) as well as religiosity to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r1", 3), rep("r2", 3), rep("r3", 3), 
+                     rep("r4", 3), rep("r5", 3), rep("r6", 3)),
+           predictor = c(rep(c("Absorption", "Religiosity", "Interaction"), 2), 
+                         rep(c("Porosity (Dulin)", "Religiosity", "Interaction"), 2), 
+                         rep(c("Martha Story", "Religiosity", "Interaction"), 2)),
+           outcome = rep(c(rep("Daily Spiritual Experiences", 3), 
+                           rep("Spiritual Events", 3)), 3),
+           beta = c(summary(r1)$coefficients["abs", "Estimate"],
+                    summary(r1)$coefficients["relig", "Estimate"],
+                    summary(r1)$coefficients["abs:relig", "Estimate"],
+                    summary(r2)$coefficients["abs", "Estimate"],
+                    summary(r2)$coefficients["relig", "Estimate"],
+                    summary(r2)$coefficients["abs:relig", "Estimate"],
+                    summary(r3)$coefficients["por", "Estimate"],
+                    summary(r3)$coefficients["relig", "Estimate"],
+                    summary(r3)$coefficients["por:relig", "Estimate"],
+                    summary(r4)$coefficients["por", "Estimate"],
+                    summary(r4)$coefficients["relig", "Estimate"],
+                    summary(r4)$coefficients["por:relig", "Estimate"],
+                    summary(r5)$coefficients["mm", "Estimate"],
+                    summary(r5)$coefficients["relig", "Estimate"],
+                    summary(r5)$coefficients["mm:relig", "Estimate"],
+                    summary(r6)$coefficients["mm", "Estimate"],
+                    summary(r6)$coefficients["relig", "Estimate"],
+                    summary(r6)$coefficients["mm:relig", "Estimate"]),
+           p = c(summary(r1)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r1)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r1)$coefficients["abs:relig", "Pr(>|t|)"],
+                 summary(r2)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r2)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r2)$coefficients["abs:relig", "Pr(>|t|)"],
+                 summary(r3)$coefficients["por", "Pr(>|t|)"],
+                 summary(r3)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r3)$coefficients["por:relig", "Pr(>|t|)"],
+                 summary(r4)$coefficients["por", "Pr(>|t|)"],
+                 summary(r4)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r4)$coefficients["por:relig", "Pr(>|t|)"],
+                 summary(r5)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r5)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r5)$coefficients["mm:relig", "Pr(>|t|)"],
+                 summary(r6)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r6)$coefficients["relig", "Pr(>|t|)"],
+                 summary(r6)$coefficients["mm:relig", "Pr(>|t|)"]),
+           rsq = c(rep(summary(r1)$r.squared, 3),
+                   rep(summary(r2)$r.squared, 3),
+                   rep(summary(r3)$r.squared, 3),
+                   rep(summary(r4)$r.squared, 3),
+                   rep(summary(r5)$r.squared, 3),
+                   rep(summary(r6)$r.squared, 3))) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  distinct(outcome, model, predictor, beta, p, signif, rsq) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif,
+         "R-squared" = rsq) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l", "r"),
+        caption = "Results of simple regressions, using a single predictor plus religiosity to predict a single outcome—e.g., lm(DSE ~ Absorption * religiosity). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+These comparisons suggest that **Absorption, Porosity (Dulin), and Martha Story were each significant predictors of spiritual experience even after controlling for religiosity**, and that **religiosity was generally the strongest predictor, followed by Porosity (Dulin), Martha Story, and finally Absorption**.
+
+## Additive models
+
+```{r}
+r7 <- lm(dse ~ (abs + por) * relig, d)
+summary(r7)
+```
+
+```{r}
+r8 <- lm(se ~ (abs + por) * relig, d)
+summary(r8)
+```
+
+```{r}
+r9 <- lm(dse ~ (abs + mm) * relig, d)
+summary(r9)
+```
+
+```{r}
+r10 <- lm(se ~ (abs + mm) * relig, d)
+summary(r10)
+```
+
+I ran a series of additive regression models, which each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r7", 2), rep("r8", 2),
+                     rep("r9", 2), rep("r10", 2)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity)",
+                               "Porosity (ctl. for Absorption)"), 2),
+                         rep(c("Absorption (ctl. for Martha Story)",
+                               "Martha Story (ctl. for Absorption)"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 2),
+                             rep("Spiritual Events", 2)), 2)),
+           beta = c(summary(r7)$coefficients["abs", "Estimate"],
+                    summary(r7)$coefficients["por", "Estimate"],
+                    summary(r8)$coefficients["abs", "Estimate"],
+                    summary(r8)$coefficients["por", "Estimate"],
+                    summary(r9)$coefficients["abs", "Estimate"],
+                    summary(r9)$coefficients["mm", "Estimate"],
+                    summary(r10)$coefficients["abs", "Estimate"],
+                    summary(r10)$coefficients["mm", "Estimate"]),
+           p = c(summary(r7)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r7)$coefficients["por", "Pr(>|t|)"],
+                 summary(r8)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r8)$coefficients["por", "Pr(>|t|)"],
+                 summary(r9)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r9)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r10)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r10)$coefficients["mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  distinct(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of additive models, using two predictors as well as religiosity and interactions with religiosity (not shown) to predict a single outcome—e.g., lm(DSE ~ (Absorption + Porosity) * religiosity). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+In almost all cases, these models suggest that **both Absorption and Porosity/Martha Mary remain significant predictors of spiritual experience after controlling for religiosity**. The only exception is the model that uses Absorption, Porosity, religiosity and interactoins with religiosity to predict DSE scores; in this case, Absorption is no longer significant (but this could be because of multicollinearity; see [Correlations], above).
+
+## Interactive models
+
+```{r}
+r11 <- lm(dse ~ abs * por * relig, d)
+summary(r11)
+```
+
+```{r}
+r12 <- lm(se ~ abs * por * relig, d)
+summary(r12)
+```
+
+```{r}
+r13 <- lm(dse ~ abs * mm * relig, d)
+summary(r13)
+```
+
+```{r}
+r14 <- lm(se ~ abs * mm * relig, d)
+summary(r14)
+```
+
+I ran a series of interactive regression models, which each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) and an interaction between predictors to predict a single outcome (either DSE or SE). We can compare the strength of these relationships in two ways (1) comparing standardized beta coefficients, which can be directly compared (further from 0 = stronger relationship) and interpreted as how many standard deviations in the outcome are associated with an increase of 1 standard deviation in the predictor (no theoretical limits to the range); or (2) comparing $R^2$ values for the model, which can be interpreted as the proportion of variance in the outcome explained by the model (range: 0-1). Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r11", 3), rep("r12", 3),
+                     rep("r13", 3), rep("r14", 3)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity, interaction)",
+                               "Porosity (ctl. for Absorption, interaction)", 
+                               "Interaction"), 2),
+                         rep(c("Absorption (ctl. for Martha Story, interaction)",
+                               "Martha Story (ctl. for Absorption, interaction)",
+                               "Interaction"), 2)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 3),
+                             rep("Spiritual Events", 3)), 2)),
+           beta = c(summary(r11)$coefficients["abs", "Estimate"],
+                    summary(r11)$coefficients["por", "Estimate"],
+                    summary(r11)$coefficients["abs:por", "Estimate"],
+                    summary(r12)$coefficients["abs", "Estimate"],
+                    summary(r12)$coefficients["por", "Estimate"],
+                    summary(r12)$coefficients["abs:por", "Estimate"],
+                    summary(r13)$coefficients["abs", "Estimate"],
+                    summary(r13)$coefficients["mm", "Estimate"],
+                    summary(r13)$coefficients["abs:mm", "Estimate"],
+                    summary(r14)$coefficients["abs", "Estimate"],
+                    summary(r14)$coefficients["mm", "Estimate"],
+                    summary(r14)$coefficients["abs:mm", "Estimate"]),
+           p = c(summary(r11)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r11)$coefficients["por", "Pr(>|t|)"],
+                 summary(r11)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r12)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r12)$coefficients["por", "Pr(>|t|)"],
+                 summary(r12)$coefficients["abs:por", "Pr(>|t|)"],
+                 summary(r13)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r13)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r13)$coefficients["abs:mm", "Pr(>|t|)"],
+                 summary(r14)$coefficients["abs", "Pr(>|t|)"],
+                 summary(r14)$coefficients["mm", "Pr(>|t|)"],
+                 summary(r14)$coefficients["abs:mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2))) %>%
+  distinct(outcome, model, predictor, beta, p, signif) %>%
+  arrange(outcome) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l"),
+        caption = "Results of interactive models, using two predictors and an interaction between them as well as religiosity and interactions with religiosity (not shown) to predict a single outcome—e.g., lm(DSE ~ Absorption * Porosity * religiosity). All variables were standardized (collapsing across sites), and all models use data pooled from all samples, without modeling differences across sites. (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:2)
+```
+
+**For predicting DSE, Absorption drops out as a significant predictor here. For predicting SE, both Absorption and Porosity remain significant.**
+
+Moreover, we observed **no evidence for an interaction between Absorption and Porosity/Martha Story** in any of these models.
+
+# Maximal models
+
+What happens when we try to predict spiritual experience using a maximal model, including absorption, porosity, religiosity, site differences, and all possible interactions among them?
+
+## Predicting DSE alone
+
+### DSE ~ Absorption * Porosity (Dulin) * religiosity * site
+
+```{r}
+r15 <- lm(dse ~ abs * por * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r15)
+```
+
+```{r, include = T}
+summary(r15)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(DSE ~ Absorption * Porosity * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### DSE ~ Absorption * Martha Story * religiosity * site
+
+```{r}
+r17 <- lm(dse ~ abs * mm * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r17)
+```
+
+```{r, include = T}
+summary(r17)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(DSE ~ Absorption * Martha Story * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### DSE ~ Absorption * Porosity (Dulin) * Martha Story * religiosity * site
+
+```{r}
+r19 <- lm(dse ~ abs * por * mm * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r19)
+```
+
+```{r, include = T}
+summary(r19)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(DSE ~ Absorption * Porosity * Martha Story * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:5, bold = T)
+```
+
+
+## Predicting SE alone
+
+### SE ~ Absorption * Porosity (Dulin) * religiosity * site
+
+```{r}
+r16 <- lm(se ~ abs * por * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r16)
+```
+
+```{r, include = T}
+summary(r16)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(SE ~ Absorption * Porosity * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### SE ~ Absorption * Martha Story * religiosity * site
+
+```{r}
+r18 <- lm(se ~ abs * mm * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r18)
+```
+
+```{r, include = T}
+summary(r18)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(SE ~ Absorption * Martha Story * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### SE ~ Absorption * Porosity (Dulin) * Martha Story * religiosity * site
+
+```{r}
+r20 <- lm(se ~ abs * por * mm * relig * p7_ctry, 
+          d, contrasts = list(p7_ctry = "contr.sum"))
+summary(r20)
+```
+
+```{r, include = T}
+summary(r20)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lm(SE ~ Absorption * Porosity * Martha Story * religiosity * site). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:5, bold = T)
+```
+
+## Combining DSE and SE
+
+### [DSE & SE] ~ Absorption * Porosity (Dulin) * religiosity * site
+
+```{r}
+r21 <- lmer(spex ~ abs * por * relig * p7_ctry * scale + (1 | p7_subj), 
+            d %>% gather(scale, spex, c(dse, se)) %>% mutate(scale = factor(scale)), 
+            contrasts = list(p7_ctry = "contr.sum",
+                             scale = "contr.sum"))
+summary(r21)
+```
+
+```{r, include = T}
+summary(r21)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("scale1", "DSE", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lmer(experience ~ Absorption * Porosity * religiosity * site * scale + (1 | subject)). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### [DSE & SE] ~ Absorption * Martha Story * religiosity * site
+
+```{r}
+r22 <- lmer(spex ~ abs * mm * relig * p7_ctry * scale + (1 | p7_subj), 
+            d %>% gather(scale, spex, c(dse, se)) %>% mutate(scale = factor(scale)), 
+            contrasts = list(p7_ctry = "contr.sum",
+                             scale = "contr.sum"))
+summary(r22)
+```
+
+```{r, include = T}
+summary(r22)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("scale1", "DSE", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lmer(experience ~ Absorption * Martha Story * religiosity * site * scale + (1 | subject)). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:4, bold = T)
+```
+
+### [DSE & SE] ~ Absorption * Porosity (Dulin) * Martha Story * religiosity * site
+
+```{r}
+r23 <- lmer(spex ~ abs * por * mm * relig * p7_ctry * scale + (1 | p7_subj), 
+            d %>% gather(scale, spex, c(dse, se)) %>% mutate(scale = factor(scale)), 
+            contrasts = list(p7_ctry = "contr.sum",
+                             scale = "contr.sum"))
+summary(r23)
+```
+
+```{r, include = T}
+summary(r23)$coefficients[] %>%
+  data.frame() %>%
+  rownames_to_column("parameter") %>%
+  mutate(parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         parameter = gsub("p7_ctry1", "US", parameter),
+         parameter = gsub("p7_ctry2", "Ghana", parameter),
+         parameter = gsub("p7_ctry3", "Thailand", parameter),
+         parameter = gsub("p7_ctry4", "China", parameter),
+         parameter = gsub("scale1", "DSE", parameter),
+         parameter = gsub("\\:", " * ", parameter),
+         signif  = ifelse(Pr...t.. < 0.05, "*", ""),
+         Pr...t.. = ifelse(Pr...t.. < 0.001, "<0.001", 
+                           format(round(Pr...t.., 3), nsmall = 3))) %>%
+  distinct(parameter, Estimate, Pr...t.., signif) %>%
+  rename("standardized beta" = "Estimate",
+         "p-value" = "Pr...t..",
+         " " = signif) %>%
+  kable(caption = "Results of the following maximal model: lmer(experience ~ Absorption * Porosity * Martha Story * religiosity * site * scale + (1 | subject)). All continuous variables were standardized (collapsing across sites) and all categorical variables were effect-coded.",
+        digits = 2, align = c("l", "r", "r", "l")) %>%
+  kable_styling() %>%
+  row_spec(2:5, bold = T)
+```
+
+## Maximal models summary
+
+Here's a summary of these patterns of significance:
+
+```{r, include = T}
+bind_rows(summary(r15)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r17)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "Martha Story"),
+          summary(r19)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "DSE",
+                   por_index = "both"),
+          summary(r16)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Porosity (Dulin)"),
+          summary(r18)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "Martha Story"),
+          summary(r20)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "SE",
+                   por_index = "both"),
+          summary(r21)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Porosity (Dulin)"),
+          summary(r22)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "Martha Story"),
+          summary(r23)$coefficients %>%
+            data.frame() %>%
+            rownames_to_column("parameter") %>%
+            mutate(outcome = "both",
+                   por_index = "both")) %>%
+  filter(parameter %in% c("abs", "por", "mm", "relig")) %>%
+  dplyr::select(outcome, por_index, parameter, Estimate, Pr...t..) %>%
+  mutate(signif = case_when(Pr...t.. < 0.001 ~ "***",
+                            Pr...t.. < 0.01 ~ "**",
+                            Pr...t.. < 0.05 ~ "*",
+                            Pr...t.. < 0.10 ~ "(+)",
+                            TRUE ~ ""),
+         parameter = gsub("abs", "Absorption", parameter),
+         parameter = gsub("por", "Porosity (Dulin)", parameter),
+         parameter = gsub("mm", "Martha Story", parameter),
+         parameter = gsub("relig", "religiosity", parameter),
+         outcome = factor(outcome, levels = c("DSE", "SE", "both")),
+         por_index = factor(por_index, levels = c("Porosity (Dulin)", "Martha Story", 
+                                                  "both"))) %>%
+  dplyr::select(-Estimate, -Pr...t..) %>%
+  spread(parameter, signif) %>%
+  # dplyr::select(-Estimate, -signif) %>%
+  # spread(parameter, Pr...t..) %>%
+  mutate_at(vars(`Martha Story`, `Porosity (Dulin)`),
+            funs(cell_spec(., "html", 
+                           color = ifelse(is.na(.), "lightgray", "black")))) %>%
+  # mutate_at(vars(Absorption, `Martha Story`, `Porosity (Dulin)`, religiosity),
+  #           funs(cell_spec(., "html", 
+  #                          bold = ifelse(. < 0.05, T, F)))) %>%
+  rename("porosity index" = "por_index") %>%
+  kable(caption = "Patterns of significance across maximal models. '***' indicates that p < 0.001; '**' indicates that p < 0.01, '*' indicates that p < 0.05, '(+)' indicates that p < 0.10, and 'NA' indicates that this parameter was not included in this model.",
+        format = "html", escape = F,
+        digits = 2, align = c("l", "l", "c", "c", "c", "c")) %>%
+  kable_styling() %>%
+  collapse_rows(1)
+```
+
+This table highlights that in these maximal models (which, recall, included not only these parameters but also site differences and all possible interactions):
+
+- **Religiosity was always a significant predictor** of spiritual experience
+- **Absorption was always a significant (or at least "marginally significant") predictor** of spiritual experience
+- **Porostiy (Dulin) and Martha Story were always significant (or at least "marginaly significant") predictors of spirtiual experience when they were treated as the sole index of porosity**, but tended to cancel each other out when they were both included in these models (due, presumably, to how strongly correlated these two indices of porosity were - i.e., multicollinearity).
+
+
+# Mediation analyses
+
+```{r}
+library(mediation)
+```
+
+Here I'll consider possible causal mediation models relating religiosity to our other predictors of interest, porosity and absorption.
+
+## Religiosity causes porosity, which causes spiritual experiences
+
+Per a Skype conversation on 2019-05-20, we consider this suite of models to be a plausible causal story.
+
+### Religiosity → Porosity (Dulin) → Daily Spiritual Experiences (DSE)
+
+```{r}
+# relig → por → dse
+b_relig.por.dse <- lm(por ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.por.dse <- lm(dse ~ relig + por, data = d %>% filter(!is.na(relig)))
+contcont_relig.por.dse <- mediation::mediate(b_relig.por.dse, c_relig.por.dse, 
+                                             sims = 1000, 
+                                             treat = "relig", mediator = "por")
+summary(contcont_relig.por.dse) # YES MEDIATION (30%)
+```
+
+These data are consistent with this causal model: an estimated `r round(contcont_relig.por.dse$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_relig.por.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.por.dse$n0.p, 3)))`).
+
+### Religiosity → Porosity (Dulin) → Spiritual Events (SE)
+
+```{r}
+# relig → por → se
+b_relig.por.se <- lm(por ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.por.se <- lm(se ~ relig + por, data = d %>% filter(!is.na(relig)))
+contcont_relig.por.se <- mediation::mediate(b_relig.por.se, c_relig.por.se, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "por")
+summary(contcont_relig.por.se) # YES MEDIATION (36%)
+```
+
+As above, these data are consistent with this causal model: an estimated `r round(contcont_relig.por.se$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_relig.por.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.por.se$n0.p, 3)))`).
+
+### Religiosity → Martha Story → Daily Spiritual Experiences (DSE)
+
+```{r}
+# relig → mm → dse
+b_relig.mm.dse <- lm(mm ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.mm.dse <- lm(dse ~ relig + mm, data = d %>% filter(!is.na(relig)))
+contcont_relig.mm.dse <- mediation::mediate(b_relig.mm.dse, c_relig.mm.dse, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "mm")
+summary(contcont_relig.mm.dse) # YES MEDIATION (13%)
+```
+
+These data are consistent with this causal model: an estimated `r round(contcont_relig.mm.dse$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_relig.mm.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.mm.dse$n0.p, 3)))`).
+
+### Religiosity → Martha Story → Spiritual Events (SE)
+
+```{r}
+# relig → mm → se
+b_relig.mm.se <- lm(mm ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.mm.se <- lm(se ~ relig + mm, data = d %>% filter(!is.na(relig)))
+contcont_relig.mm.se <- mediation::mediate(b_relig.mm.se, c_relig.mm.se, 
+                                           sims = 1000, 
+                                           treat = "relig", mediator = "mm")
+summary(contcont_relig.mm.se) # YES MEDIATION (25%)
+```
+
+As above, these data are consistent with this causal model: an estimated `r round(contcont_relig.mm.se$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_relig.mm.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.mm.se$n0.p, 3)))`).
+
+## Porosity causes religiosity, which causes spiritual experiences
+
+Per a Skype conversation on 2019-05-20, we do _not_ consider this suite of models to be a plausible causal story, but it's important to check this "reverse" direction of the "plausible" models above. If the data are equally consistent with both sets of mediation models, we need to be aware of this and exercise caution in advocating for one direction of causation over the other.
+
+### Porosity (Dulin) → Religiosity → Daily Spiritual Experiences (DSE)
+
+```{r}
+# por → relig → dse
+b_por.relig.dse <- lm(relig ~ por, data = d %>% filter(!is.na(relig)))
+c_por.relig.dse <- lm(dse ~ por + relig, data = d %>% filter(!is.na(relig)))
+contcont_por.relig.dse <- mediation::mediate(b_por.relig.dse, c_por.relig.dse, 
+                                             sims = 1000, 
+                                             treat = "relig", mediator = "por")
+summary(contcont_por.relig.dse) # NO MEDIATION (0%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_por.relig.dse$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_por.relig.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_por.relig.dse$n0.p, 3)))`).
+
+### Porosity (Dulin) → Religiosity → Spiritual Events (SE)
+
+```{r}
+# por → relig → se
+b_por.relig.se <- lm(relig ~ por, data = d %>% filter(!is.na(relig)))
+c_por.relig.se <- lm(se ~ por + relig, data = d %>% filter(!is.na(relig)))
+contcont_por.relig.se <- mediation::mediate(b_por.relig.se, c_por.relig.se, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "por")
+summary(contcont_por.relig.se) # NO MEDIATION (0%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_por.relig.se$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_por.relig.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_por.relig.se$n0.p, 3)))`).
+
+### Martha Story → Religiosity → Daily Spiritual Experiences (DSE)
+
+```{r}
+# mm → relig → dse
+b_mm.relig.dse <- lm(relig ~ mm, data = d %>% filter(!is.na(relig)))
+c_mm.relig.dse <- lm(dse ~ mm + relig, data = d %>% filter(!is.na(relig)))
+contcont_mm.relig.dse <- mediation::mediate(b_mm.relig.dse, c_mm.relig.dse, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "mm")
+summary(contcont_mm.relig.dse) # NO MEDIATION (0%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_mm.relig.dse$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_mm.relig.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_mm.relig.dse$n0.p, 3)))`).
+
+### Martha Story → Religiosity → Spiritual Events (SE)
+
+```{r}
+# mm → relig → se
+b_mm.relig.se <- lm(relig ~ mm, data = d %>% filter(!is.na(relig)))
+c_mm.relig.se <- lm(se ~ mm + relig, data = d %>% filter(!is.na(relig)))
+contcont_mm.relig.se <- mediation::mediate(b_mm.relig.se, c_mm.relig.se, 
+                                           sims = 1000, 
+                                           treat = "relig", mediator = "mm")
+summary(contcont_mm.relig.se) # NO MEDIATION (0%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_mm.relig.se$n0, 2) * 100`% of the effect of religiosity on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_mm.relig.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_mm.relig.se$n0.p, 3)))`).
+
+## Religiosity causes absorption, which causes spiritual experiences
+
+I don't think we've discussed whether this is a plausible suite of causal models.
+
+### Religiosity → Absorption → Daily Spiritual Experiences (DSE)
+
+```{r}
+# relig → abs → dse
+b_relig.abs.dse <- lm(abs ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.abs.dse <- lm(dse ~ relig + abs, data = d %>% filter(!is.na(relig)))
+contcont_relig.abs.dse <- mediation::mediate(b_relig.abs.dse, c_relig.abs.dse, 
+                                             sims = 1000, 
+                                             treat = "relig", mediator = "abs")
+summary(contcont_relig.abs.dse) # YES MEDIATION (30%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_relig.abs.dse$n0, 2) * 100`% of the effect of Religiosity on DSE scores is mediated by Absorption (_p_ `r ifelse(contcont_relig.abs.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.abs.dse$n0.p, 3)))`).
+
+### Religiosity → Absorption → Spiritual Events (SE)
+
+```{r}
+# relig → abs → se
+b_relig.abs.se <- lm(abs ~ relig, data = d %>% filter(!is.na(relig)))
+c_relig.abs.se <- lm(se ~ relig + abs, data = d %>% filter(!is.na(relig)))
+contcont_relig.abs.se <- mediation::mediate(b_relig.abs.se, c_relig.abs.se, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "abs")
+summary(contcont_relig.abs.se) # YES MEDIATION (36%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_relig.abs.se$n0, 2) * 100`% of the effect of Religiosity on DSE scores is mediated by Absorption (_p_ `r ifelse(contcont_relig.abs.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_relig.abs.se$n0.p, 3)))`).
+
+## Absorption causes religiosity, which causes spiritual experiences
+
+I don't think we've discussed whether this is a plausible suite of causal models; again, it's important to examine both possible directions of causation (religiosity → absorption vs. absorption → religiosity).
+
+### Absorption → Religiosity → Daily Spiritual Experiences (DSE)
+
+```{r}
+# abs → relig → dse
+b_abs.relig.dse <- lm(relig ~ abs, data = d %>% filter(!is.na(relig)))
+c_abs.relig.dse <- lm(dse ~ abs + relig, data = d %>% filter(!is.na(relig)))
+contcont_abs.relig.dse <- mediation::mediate(b_abs.relig.dse, c_abs.relig.dse, 
+                                             sims = 1000, 
+                                             treat = "relig", mediator = "abs")
+summary(contcont_abs.relig.dse) # NO MEDIATION (0%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_abs.relig.dse$n0, 2) * 100`% of the effect of Religiosity on DSE scores is mediated by Absorption (_p_ `r ifelse(contcont_abs.relig.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.relig.dse$n0.p, 3)))`).
+
+### Absorption → Religiosity → Spiritual Events (SE)
+
+```{r}
+# abs → relig → se
+b_abs.relig.se <- lm(relig ~ abs, data = d %>% filter(!is.na(relig)))
+c_abs.relig.se <- lm(se ~ abs + relig, data = d %>% filter(!is.na(relig)))
+contcont_abs.relig.se <- mediation::mediate(b_abs.relig.se, c_abs.relig.se, 
+                                            sims = 1000, 
+                                            treat = "relig", mediator = "abs")
+summary(contcont_abs.relig.se) # NO MEDIATION (0%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_abs.relig.se$n0, 2) * 100`% of the effect of Religiosity on DSE scores is mediated by Absorption (_p_ `r ifelse(contcont_abs.relig.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.relig.se$n0.p, 3)))`).
+
+## Mediation summary
+
+**The only kind of causal model involving religiosity that is consistent with our Packet 7 data is the following: religiosity causes porosity, which in turn causes spiritual experience.** This mediation is significant regardless of which index of porosity we use (Porosity (Dulin) or Martha Story) and regardless of which index of spiritual experience we use (DSE or SE). None of these are "full mediations" - porosity only explains `r round(min(contcont_relig.por.dse$n0, contcont_relig.por.se$n0, contcont_relig.mm.dse$n0, contcont_relig.mm.se$n0), 2) * 100` - `r round(max(contcont_relig.por.dse$n0, contcont_relig.por.se$n0, contcont_relig.mm.dse$n0, contcont_relig.mm.se$n0), 2) * 100`% of the effect of religiosity on spiritual experience - but it's consistent across these measures. The reverse causal direction (porosity causes religiosity, which in turn causes spiritual experience) is _not_ supported, and neither is any model involving absorption and religiosity.
+
+A note of caution: As per our Skype conversation on 2019-05-20, it's important to note that all of these models are collapsing across site. I would _not_ predict that this mediation would "work" the same way in every site considered indivdiaully.
+
+
