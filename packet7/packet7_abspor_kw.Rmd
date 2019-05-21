@@ -929,12 +929,339 @@ Again, this is kind of all over the place! **No consistent pattern across sites*
 
 ## Interactive models
 
-[not yet run]
+```{r}
+r39_us <- lm(dse ~ abs * por, d_std_bysite %>% filter(p7_ctry == "US"))
+r39_gh <- lm(dse ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Ghana"))
+r39_th <- lm(dse ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Thailand"))
+r39_ch <- lm(dse ~ abs * por, d_std_bysite %>% filter(p7_ctry == "China"))
+r39_vt <- lm(dse ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Vanuatu"))
+```
+
+```{r}
+r40_us <- lm(se ~ abs * por, d_std_bysite %>% filter(p7_ctry == "US"))
+r40_gh <- lm(se ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Ghana"))
+r40_th <- lm(se ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Thailand"))
+r40_ch <- lm(se ~ abs * por, d_std_bysite %>% filter(p7_ctry == "China"))
+r40_vt <- lm(se ~ abs * por, d_std_bysite %>% filter(p7_ctry == "Vanuatu"))
+```
+
+```{r}
+r41_us <- lm(dse ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "US"))
+r41_gh <- lm(dse ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Ghana"))
+r41_th <- lm(dse ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Thailand"))
+r41_ch <- lm(dse ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "China"))
+r41_vt <- lm(dse ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Vanuatu"))
+```
+
+```{r}
+r42_us <- lm(se ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "US"))
+r42_gh <- lm(se ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Ghana"))
+r42_th <- lm(se ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Thailand"))
+r42_ch <- lm(se ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "China"))
+r42_vt <- lm(se ~ abs * mm, d_std_bysite %>% filter(p7_ctry == "Vanuatu"))
+```
+
+I ran a series of interactive regression models parallel to the models included in [Interactive models]; these models each used two predictors (either Absorption and Porosity, or Absorption and Martha Story) and an interaction between predictors to predict a single outcome (either DSE or SE), within each site. Here is a summary:
+
+```{r, include = T}
+data.frame(model = c(rep("r39_us", 3), rep("r39_gh", 3), rep("r39_th", 3), 
+                     rep("r39_ch", 3), rep("r39_vt", 3), 
+                     rep("r40_us", 3), rep("r40_gh", 3), rep("r40_th", 3),
+                     rep("r40_ch", 3), rep("r40_vt", 3),
+                     rep("r41_us", 3), rep("r41_gh", 3), rep("r41_th", 3), 
+                     rep("r41_ch", 3), rep("r41_vt", 3), 
+                     rep("r42_us", 3), rep("r42_gh", 3), rep("r42_th", 3),
+                     rep("r42_ch", 3), rep("r42_vt", 3)),
+           predictor = c(rep(c("Absorption (ctl. for Porosity, interaction)",
+                               "Porosity (ctl. for Absorption, interaction)", 
+                               "Interaction"), 10),
+                         rep(c("Absorption (ctl. for Martha Story, interaction)",
+                               "Martha Story (ctl. for Absorption, interaction)",
+                               "Interaction"), 10)),
+           outcome = c(rep(c(rep("Daily Spiritual Experiences", 15),
+                             rep("Spiritual Events", 15)), 2)),
+           beta = c(summary(r39_us)$coefficients["abs", "Estimate"],
+                    summary(r39_us)$coefficients["por", "Estimate"],
+                    summary(r39_us)$coefficients["abs:por", "Estimate"],
+                    summary(r39_gh)$coefficients["abs", "Estimate"],
+                    summary(r39_gh)$coefficients["por", "Estimate"],
+                    summary(r39_gh)$coefficients["abs:por", "Estimate"],
+                    summary(r39_th)$coefficients["abs", "Estimate"],
+                    summary(r39_th)$coefficients["por", "Estimate"],
+                    summary(r39_th)$coefficients["abs:por", "Estimate"],
+                    summary(r39_ch)$coefficients["abs", "Estimate"],
+                    summary(r39_ch)$coefficients["por", "Estimate"],
+                    summary(r39_ch)$coefficients["abs:por", "Estimate"],
+                    summary(r39_vt)$coefficients["abs", "Estimate"],
+                    summary(r39_vt)$coefficients["por", "Estimate"],
+                    summary(r39_vt)$coefficients["abs:por", "Estimate"],
+                    summary(r40_us)$coefficients["abs", "Estimate"],
+                    summary(r40_us)$coefficients["por", "Estimate"],
+                    summary(r40_us)$coefficients["abs:por", "Estimate"],
+                    summary(r40_gh)$coefficients["abs", "Estimate"],
+                    summary(r40_gh)$coefficients["por", "Estimate"],
+                    summary(r40_gh)$coefficients["abs:por", "Estimate"],
+                    summary(r40_th)$coefficients["abs", "Estimate"],
+                    summary(r40_th)$coefficients["por", "Estimate"],
+                    summary(r40_th)$coefficients["abs:por", "Estimate"],
+                    summary(r40_ch)$coefficients["abs", "Estimate"],
+                    summary(r40_ch)$coefficients["por", "Estimate"],
+                    summary(r40_ch)$coefficients["abs:por", "Estimate"],
+                    summary(r40_vt)$coefficients["abs", "Estimate"],
+                    summary(r40_vt)$coefficients["por", "Estimate"],
+                    summary(r40_vt)$coefficients["abs:por", "Estimate"],
+                    summary(r41_us)$coefficients["abs", "Estimate"],
+                    summary(r41_us)$coefficients["mm", "Estimate"],
+                    summary(r41_us)$coefficients["abs:mm", "Estimate"],
+                    summary(r41_gh)$coefficients["abs", "Estimate"],
+                    summary(r41_gh)$coefficients["mm", "Estimate"],
+                    summary(r41_gh)$coefficients["abs:mm", "Estimate"],
+                    summary(r41_th)$coefficients["abs", "Estimate"],
+                    summary(r41_th)$coefficients["mm", "Estimate"],
+                    summary(r41_th)$coefficients["abs:mm", "Estimate"],
+                    summary(r41_ch)$coefficients["abs", "Estimate"],
+                    summary(r41_ch)$coefficients["mm", "Estimate"],
+                    summary(r41_ch)$coefficients["abs:mm", "Estimate"],
+                    summary(r41_vt)$coefficients["abs", "Estimate"],
+                    summary(r41_vt)$coefficients["mm", "Estimate"],
+                    summary(r41_vt)$coefficients["abs:mm", "Estimate"],
+                    summary(r42_us)$coefficients["abs", "Estimate"],
+                    summary(r42_us)$coefficients["mm", "Estimate"],
+                    summary(r42_us)$coefficients["abs:mm", "Estimate"],
+                    summary(r42_gh)$coefficients["abs", "Estimate"],
+                    summary(r42_gh)$coefficients["mm", "Estimate"],
+                    summary(r42_gh)$coefficients["abs:mm", "Estimate"],
+                    summary(r42_th)$coefficients["abs", "Estimate"],
+                    summary(r42_th)$coefficients["mm", "Estimate"],
+                    summary(r42_th)$coefficients["abs:mm", "Estimate"],
+                    summary(r42_ch)$coefficients["abs", "Estimate"],
+                    summary(r42_ch)$coefficients["mm", "Estimate"],
+                    summary(r42_ch)$coefficients["abs:mm", "Estimate"],
+                    summary(r42_vt)$coefficients["abs", "Estimate"],
+                    summary(r42_vt)$coefficients["mm", "Estimate"],
+                    summary(r42_vt)$coefficients["abs:mm", "Estimate"]),
+           p = c(summary(r39_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r39_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r39_us)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r39_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r39_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r39_gh)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r39_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r39_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r39_th)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r39_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r39_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r39_ch)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r39_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r39_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r39_vt)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r40_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r40_us)$coefficients["por", "Pr(>|t|)"],
+                    summary(r40_us)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r40_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r40_gh)$coefficients["por", "Pr(>|t|)"],
+                    summary(r40_gh)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r40_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r40_th)$coefficients["por", "Pr(>|t|)"],
+                    summary(r40_th)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r40_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r40_ch)$coefficients["por", "Pr(>|t|)"],
+                    summary(r40_ch)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r40_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r40_vt)$coefficients["por", "Pr(>|t|)"],
+                    summary(r40_vt)$coefficients["abs:por", "Pr(>|t|)"],
+                    summary(r41_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r41_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r41_us)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r41_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r41_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r41_gh)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r41_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r41_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r41_th)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r41_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r41_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r41_ch)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r41_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r41_vt)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r41_vt)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r42_us)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r42_us)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r42_us)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r42_gh)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r42_gh)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r42_gh)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r42_th)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r42_th)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r42_th)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r42_ch)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r42_ch)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r42_ch)$coefficients["abs:mm", "Pr(>|t|)"],
+                    summary(r42_vt)$coefficients["abs", "Pr(>|t|)"],
+                    summary(r42_vt)$coefficients["mm", "Pr(>|t|)"],
+                    summary(r42_vt)$coefficients["abs:mm", "Pr(>|t|)"])) %>%
+  mutate(signif = ifelse(p < 0.05, "*", ""),
+         p = ifelse(p < 0.001, "<0.001", format(round(p, 3), nsmall = 2)),
+         site = gsub("^.*_", "", model),
+         site = factor(site, 
+                       levels = c("us", "gh", "th", "ch", "vt"),
+                       labels = c("US", "Ghana", "Thailand", 
+                                  "China", "Vanuatu")),
+         model = gsub("_.*$", "", model)) %>%
+  select(outcome, site, model, predictor, beta, p, signif) %>%
+  arrange(outcome, site) %>%
+  rename("standardized beta" = beta,
+         "p-value" = p,
+         " " = signif) %>%
+  kable(digits = 2, align = c("l", "l", "l", "r", "r", "l", "r"),
+        caption = "Results of interactive models, using two predictors and an interaction between them to predict a single outcome within each field site—e.g., lm(DSE ~ Absorption * Porosity * site). All variables were standardized (within each site). (Note: ignore the 'model' column - this is just a convenience for KW.)") %>%
+  kable_styling() %>%
+  collapse_rows(1:3)
+```
+
+Yet again, these comparisons again suggest that **Porosity (Dulin) was a stronger predictor than Absorption, with Martha Story somewhere in between**; i.e., the beta coefficients for Porosity or Martha Story were larger than the beta coefficients for Absorption. In all of these cases, however, both Absorption and Porosity/Martha Story remain significant predictors ever controlling for each other.
+
+And again, we observed **no evidence for an interaction between Absorption and Porosity/Martha Story** in any of these models.
+
+# Mediation analyses
+
+```{r}
+library(mediation)
+```
+
+Here I'll consider possible causal mediation models involving absorption and porosity.
+
+## Absorption causes porosity, which causes spiritual experiences
+
+Per a Skype conversation on 2019-05-17, we consider this suite of models to be a plausible causal story.
+
+### Absorption → Porosity (Dulin) → Daily Spiritual Experiences (DSE)
+
+```{r}
+# abs → por → dse
+b_abs.por.dse <- lm(por ~ abs, data = d_std %>% filter(!is.na(abs)))
+c_abs.por.dse <- lm(dse ~ abs + por, data = d_std %>% filter(!is.na(abs)))
+contcont_abs.por.dse <- mediation::mediate(b_abs.por.dse, c_abs.por.dse, 
+                                           sims = 1000, 
+                                           treat = "abs", mediator = "por")
+summary(contcont_abs.por.dse) # YES MEDIATION (92%)
+```
+
+These data are consistent with this causal model: an estimated `r round(contcont_abs.por.dse$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_abs.por.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.por.dse$n0.p, 3)))`).
+
+### Absorption → Porosity (Dulin) → Spiritual Events (SE)
+
+```{r}
+# abs → por → se
+b_abs.por.se <- lm(por ~ abs, data = d_std %>% filter(!is.na(abs)))
+c_abs.por.se <- lm(se ~ abs + por, data = d_std %>% filter(!is.na(abs)))
+contcont_abs.por.se <- mediation::mediate(b_abs.por.se, c_abs.por.se, 
+                                          sims = 1000, 
+                                          treat = "abs", mediator = "por")
+summary(contcont_abs.por.se) # YES MEDIATION (48%)
+```
+
+As above, these data are consistent with this causal model: an estimated `r round(contcont_abs.por.se$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_abs.por.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.por.se$n0.p, 3)))`).
+
+### Absorption → Martha Story → Daily Spiritual Experiences (DSE)
+
+```{r}
+# abs → mm → dse
+b_abs.mm.dse <- lm(mm ~ abs, data = d_std %>% filter(!is.na(abs)))
+c_abs.mm.dse <- lm(dse ~ abs + mm, data = d_std %>% filter(!is.na(abs)))
+contcont_abs.mm.dse <- mediation::mediate(b_abs.mm.dse, c_abs.mm.dse, 
+                                          sims = 1000, 
+                                          treat = "abs", mediator = "mm")
+summary(contcont_abs.mm.dse) # YES MEDIATION (73%)
+```
+
+These data are consistent with this causal model: an estimated `r round(contcont_abs.mm.dse$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_abs.mm.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.mm.dse$n0.p, 3)))`).
+
+### Absorption → Martha Story → Spiritual Events (SE)
+
+```{r}
+# abs → mm → se
+b_abs.mm.se <- lm(mm ~ abs, data = d_std %>% filter(!is.na(abs)))
+c_abs.mm.se <- lm(se ~ abs + mm, data = d_std %>% filter(!is.na(abs)))
+contcont_abs.mm.se <- mediation::mediate(b_abs.mm.se, c_abs.mm.se, 
+                                         sims = 1000, 
+                                         treat = "abs", mediator = "mm")
+summary(contcont_abs.mm.se) # YES MEDIATION (47%)
+```
+
+As above, these data are consistent with this causal model: an estimated `r round(contcont_abs.mm.se$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_abs.mm.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_abs.mm.se$n0.p, 3)))`).
+
+## Porosity causes Absorption, which causes spiritual experiences
+
+Per a Skype conversation on 2019-05-17, I think we do _not_ consider this suite of models to be a plausible causal story, but it's important to check this "reverse" direction of the "plausible" models above. If the data are equally consistent with both sets of mediation models, we need to be aware of this and exercise caution in advocating for one direction of causation over the other.
+
+### Porosity (Dulin) → Absorption → Daily Spiritual Experiences (DSE)
+
+```{r}
+# por → abs → dse
+b_por.abs.dse <- lm(abs ~ por, data = d_std %>% filter(!is.na(abs)))
+c_por.abs.dse <- lm(dse ~ por + abs, data = d_std %>% filter(!is.na(abs)))
+contcont_por.abs.dse <- mediation::mediate(b_por.abs.dse, c_por.abs.dse, 
+                                             sims = 1000, 
+                                             treat = "abs", mediator = "por")
+summary(contcont_por.abs.dse) # NO MEDIATION (0%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_por.abs.dse$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_por.abs.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_por.abs.dse$n0.p, 3)))`).
+
+### Porosity (Dulin) → Absorption → Spiritual Events (SE)
+
+```{r}
+# por → abs → se
+b_por.abs.se <- lm(abs ~ por, data = d_std %>% filter(!is.na(abs)))
+c_por.abs.se <- lm(se ~ por + abs, data = d_std %>% filter(!is.na(abs)))
+contcont_por.abs.se <- mediation::mediate(b_por.abs.se, c_por.abs.se, 
+                                            sims = 1000, 
+                                            treat = "abs", mediator = "por")
+summary(contcont_por.abs.se) # NO MEDIATION (0%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_por.abs.se$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Porosity (Dulin) (_p_ `r ifelse(contcont_por.abs.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_por.abs.se$n0.p, 3)))`).
+
+### Martha Story → Absorption → Daily Spiritual Experiences (DSE)
+
+```{r}
+# mm → abs → dse
+b_mm.abs.dse <- lm(abs ~ mm, data = d_std %>% filter(!is.na(abs)))
+c_mm.abs.dse <- lm(dse ~ mm + abs, data = d_std %>% filter(!is.na(abs)))
+contcont_mm.abs.dse <- mediation::mediate(b_mm.abs.dse, c_mm.abs.dse, 
+                                            sims = 1000, 
+                                            treat = "abs", mediator = "mm")
+summary(contcont_mm.abs.dse) # NO MEDIATION (0%)
+```
+
+These data are _not_ consistent with this causal model: an estimated `r round(contcont_mm.abs.dse$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_mm.abs.dse$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_mm.abs.dse$n0.p, 3)))`).
+
+### Martha Story → Absorption → Spiritual Events (SE)
+
+```{r}
+# mm → abs → se
+b_mm.abs.se <- lm(abs ~ mm, data = d_std %>% filter(!is.na(abs)))
+c_mm.abs.se <- lm(se ~ mm + abs, data = d_std %>% filter(!is.na(abs)))
+contcont_mm.abs.se <- mediation::mediate(b_mm.abs.se, c_mm.abs.se, 
+                                           sims = 1000, 
+                                           treat = "abs", mediator = "mm")
+summary(contcont_mm.abs.se) # NO MEDIATION (0%)
+```
+
+As above, these data are _not_ consistent with this causal model: an estimated `r round(contcont_mm.abs.se$n0, 2) * 100`% of the effect of Absorption on DSE scores is mediated by Martha Story (_p_ `r ifelse(contcont_mm.abs.se$n0.p < 0.001, "< 0.001", paste0("= ", round(contcont_mm.abs.se$n0.p, 3)))`).
+
+## Mediation summary
+
+**The only kind of causal model that is consistent with our Packet 7 data is the following: absorption causes porosity, which in turn causes spiritual experience.** This mediation is significant regardless of which index of porosity we use (Porosity (Dulin) or Martha Story) and regardless of which index of spiritual experience we use (DSE or SE). Porosity explains quite a lot of the effect of absorption on spiritual experience: `r round(min(contcont_abs.por.dse$n0, contcont_abs.por.se$n0, contcont_abs.mm.dse$n0, contcont_abs.mm.se$n0), 2) * 100` - `r round(max(contcont_abs.por.dse$n0, contcont_abs.por.se$n0, contcont_abs.mm.dse$n0, contcont_abs.mm.se$n0), 2) * 100`%, depending on which indices we use. The reverse causal direction (porosity causes absorption, which in turn causes spiritual experience) is _not_ supported.
+
+A note of caution: It's important to note that all of these models are collapsing across site. If we really wanted to go down this route, we should also try to account for site differences in these models.
+
+
 
 
 # KW to-do list
 
 Next steps:
 
-- Account for religiosity
 - More complex models (mixed effects, 2 indices of spex)
